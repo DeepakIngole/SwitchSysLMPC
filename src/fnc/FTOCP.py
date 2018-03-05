@@ -1,4 +1,4 @@
-def FTOCP(M, G, E, x0, optimize, np, z0):
+def FTOCP(M, G, E, F, b, x0, optimize, np, z0, linalg):
 
     def cost(z):
         return 0.5 * ( np.dot(z.T, np.dot(M, z)) )
@@ -6,18 +6,31 @@ def FTOCP(M, G, E, x0, optimize, np, z0):
     def jac(z):
         return np.dot(z.T, M)
 
-    cons = {'type':'eq',
-            'fun':lambda z: np.dot(E, x0)- np.dot(G,z), # E*x0 - Gz = 0
-            'jac':lambda z: -G}
-    # cons = {'type':'ineq',
-    #         'fun':lambda x: b - np.dot(A,x), # b - Ax => 0
-    #         'jac':lambda x: -A}
 
-    opt = {'disp':True}
+    cons =({'type':'eq',
+            'fun':lambda z: np.dot(E, x0)- np.dot(G,z), # E*x0 - Gz = 0
+            'jac':lambda z: -G},
+           {'type':'ineq',
+            'fun':lambda z: b - np.dot(F,z), # b - Ax => 0 PAY ATTENTION HERE DIFFERENT CONVETION FROM USUAL
+            'jac':lambda z: -F})
+
+    opt = {'disp':False}
 
     res_cons = optimize.minimize(cost, z0, jac=jac,constraints=cons, method='SLSQP', options=opt)
 
-    return res_cons
+    #Need To Check Feasibility
+    EqConstrCheck = np.dot(E, x0) - np.dot(G,res_cons.x)
+    if ( (np.dot(EqConstrCheck, EqConstrCheck) < 1e-8) and ( ((b - np.dot(F,res_cons.x))).all > -1e-8)):
+        feasible = 1
+    else:
+        feasible = 0
+        print("Infeasibility")
+        print( ((np.dot(E, x0) - np.dot(G,res_cons.x)).all < 1e-8) )
+        print(np.dot(E, x0)-np.dot(G,res_cons.x))
+        print( ( ((b - np.dot(F,res_cons.x))).all > -1e-8) )
+        print(b-np.dot(F,res_cons.x))
+
+    return res_cons, feasible
 
 def BuildMatEqConst(A ,B ,N ,n ,d ,np):
     # Buil matrices for optimization (Convention from Chapter 15.2 Borrelli, Bemporad and Morari MPC book)
@@ -41,16 +54,72 @@ def BuildMatEqConst(A ,B ,N ,n ,d ,np):
 
     # Given the above matrices the dynamic constrain is give by Gz=Ex(0) where x(0) is the measurement
     # For sanity check plot the matrices
-    print("Print Gx")
-    print(Gx)
-    print("Print Gu")
-    print(Gu)
-    print("Print G")
-    print(G)
-    print("Print E")
-    print(E)
+    # print("Print Gx")
+    # print(Gx)
+    # print("Print Gu")
+    # print(Gu)
+    # print("Print G")
+    # print(G)
+    # print("Print E")
+    # print(E)
 
     return G, E
+
+def BuildMatIneqConst(N, n, np, linalg):
+    # Buil the matrices for the state constraint in each region. In the region i we want Fx[i]x <= bx[b]
+    Fx = np.array([[[ 1., 0.],
+                    [-1., 0.],
+                    [ 0., 1.],
+                    [ 0.,-1.]],
+                   [[ 1., 0.],
+                    [-1., 0.],
+                    [ 0., 1.],
+                    [ 0.,-1.]]])
+
+    bx = np.array([[[ 4.],
+                    [ 4.],
+                    [ 4.],
+                    [ 4.]],
+                   [[ 4.],
+                    [ 4.],
+                    [ 4.],
+                    [ 4.]]])
+
+    # Buil the matrices for the input constraint in each region. In the region i we want Fx[i]x <= bx[b]
+    Fu = np.array([[[ 1.],
+                    [-1.]],
+                   [[ 1.],
+                    [-1.]]])
+
+    bu = np.array([[[ 1.],
+                    [ 1.]],
+                   [[ 1.],
+                    [ 1.]]])
+
+    # Now stuck the constraint matrices to express them in the form Fz<=b. Note that z collects states and inputs
+
+    # Let's start by computing the submatrix of F relates with the state
+    rep_a = [Fx[0]] * (N)
+    Mat = linalg.block_diag(*rep_a)
+    NoTerminalConstr = np.zeros((np.shape(Mat)[0],n)) # No need to constraint also the terminal point
+    Fxtot = np.hstack((Mat, NoTerminalConstr))
+    bxtot = np.repeat(bx[0], N)
+
+
+    # Let's start by computing the submatrix of F relates with the input
+    rep_b = [Fu[0]] * (N)
+    Futot = linalg.block_diag(*rep_b)
+    butot = np.repeat(bu[0], N)
+
+    # Let's stack all together
+    rFxtot, cFxtot = np.shape(Fxtot)
+    rFutot, cFutot = np.shape(Futot)
+    Dummy1 = np.hstack( (Fxtot                    , np.zeros((rFxtot,cFutot))))
+    Dummy2 = np.hstack( (np.zeros((rFutot,cFxtot)), Futot))
+    F = np.vstack( ( Dummy1, Dummy2) )
+    b = np.hstack((bxtot, butot))
+
+    return F, b
 
 def BuildMatCost(Q, R, P, N, linalg):
     b = [Q] * (N)
@@ -62,8 +131,8 @@ def BuildMatCost(Q, R, P, N, linalg):
     M = linalg.block_diag(Mx, P, Mu)
 
     # For sanity check
-    print("Cost Matrix")
-    print(M)
+    # print("Cost Matrix")
+    # print(M)
 
     return M
 

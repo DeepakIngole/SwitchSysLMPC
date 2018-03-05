@@ -1,7 +1,3 @@
-def g(x):
-    return 2*x
-
-
 def DefSystem(np):
 
     # A \in \mathbb{R}^{n \dot n \dot r} where n in the dimension of the state and r is the number of regions
