@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 # print("Print A in region 0, but squeeze ", np.squeeze(A[np.ix_([0],[0,1],[0,1])]))
 
 # Initialization
-Time = 10                    # Number of simulation's steps
+Time = 20                    # Number of simulation's steps
 N = 5                       # Controller's horizon
 n = 2                       # State Dimensions
 d = 1                       # Input Dimensions
