@@ -2,7 +2,7 @@ import sys
 sys.path.append('fnc')
 from UtilityFunc import DefSystem
 from FTOCP import BuildMatEqConst, BuildMatCost, FTOCP, GetPred, BuildMatIneqConst
-
+from ComputeFeasibleSolution import ComputeFeasibleSolution
 import numpy as np
 import time
 from scipy import linalg
@@ -43,27 +43,18 @@ print(G[np.ix_(np.array([1,2]),np.array([1]))])
 x[:,0] = np.array([-3.95,-0.05]) # Set initial Conditions
 InitialGuess = np.zeros(((N+1)*n+N*d))
 
-for t in range(0,Time):
-    # Solve the Finite Time Optimal Control Problem (FTOCP)
-    start_time = time.clock()
-    [SolutionOpt, feasible] = FTOCP(M, G, E, F, b, x[:,t], optimize, np, InitialGuess, linalg)
-    InitialGuess = SolutionOpt.x
-    [xPred,uPred ] = GetPred(SolutionOpt, n, d, N, np)
+x = ComputeFeasibleSolution(Time, A, B, M, G, F, E, b, x, u, n, d, N, optimize, np, InitialGuess, linalg, FTOCP, GetPred, time)
 
-    if feasible == 1:
-        u[:, t] = uPred[0]
-    else:
-        u[:, t] = 10000
-        print("ERROR: Optimization Problem Infeasible")
-        break
 
-    # Apply the input to the system
-    x[:,t+1] = np.dot(A[0], (x[:,t])) + np.dot(B[0], (u[:,t]))
-    print "Solver Time ",time.clock() - start_time, "seconds"
+# Initialize the LMPC
+Iteration = 5 #Need to define a priori the iterations as need to allocate memory
 
-if feasible == 1:
-    print x
+SS = 10000*np.ones((n, Time+1, Iteration))
 
-    plt.plot(x[np.ix_([0],np.arange(Time+1))], x[np.ix_([1],np.arange(Time+1))], 'ro')
-    plt.axis([-4, 4, -4, 4])
-    plt.show()
+SS[:,:,1] = x
+Qfunction =
+
+
+# plt.plot(x[np.ix_([0],np.arange(Time+1))], x[np.ix_([1],np.arange(Time+1))], 'ro')
+# plt.axis([-4, 4, -4, 4])
+# plt.show()
