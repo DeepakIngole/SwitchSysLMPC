@@ -3,6 +3,7 @@ sys.path.append('fnc')
 from UtilityFunc import DefSystem
 from FTOCP import BuildMatEqConst, BuildMatCost, FTOCP, GetPred, BuildMatIneqConst
 from ComputeFeasibleSolution import ComputeFeasibleSolution
+from FuncLMPC import ComputeCost
 import numpy as np
 import time
 from scipy import linalg
@@ -52,7 +53,6 @@ Iteration = 5 #Need to define a priori the iterations as need to allocate memory
 SS = 10000*np.ones((n, Time+1, Iteration))
 
 SS[:,:,1] = x
-Qfunction =
 
 
 # plt.plot(x[np.ix_([0],np.arange(Time+1))], x[np.ix_([1],np.arange(Time+1))], 'ro')
