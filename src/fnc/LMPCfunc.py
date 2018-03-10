@@ -7,6 +7,12 @@ def ComputeCost(Q, R, x, u, np, time):
         if (i == 0): # Note that for i = 0 --> pick the latest element of the vector x
             Cost[time-i] = np.dot(x[:,time-i].T, np.dot(Q, x[:,time-i]) )
         else:
-            Cost[time-i] = Cost[time-i+1] + np.dot(x[:,time-i].T, np.dot(Q, x[:,time-i]) )
+            varx = x[:,time-i]
+            costadd = np.dot(x[:,time-i].T, np.dot(Q, x[:,time-i]) ) + np.dot(u[:,time-i].T, np.dot(R, u[:,time-i]) )
+            Cost[time-i] = Cost[time-i+1] + np.dot(x[:,time-i].T, np.dot(Q, x[:,time-i]) ) + np.dot(u[:,time-i].T, np.dot(R, u[:,time-i]) )
+            if i == time:
+                IndexUsed = time - i
+                TotCost = Cost[0]
+                here = 1
 
     return Cost

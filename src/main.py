@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 
 # Initialization
 Time = 40                    # Number of simulation's steps
-N = 3                       # Controller's horizon
+N = 2                       # Controller's horizon
 n = 2                       # State Dimensions
 d = 1                       # Input Dimensions
 x_feasible = np.zeros((n,Time+1))    # Initialize the closed loop trajectory
@@ -51,26 +51,26 @@ InitialGuess = np.zeros(((N+1)*n+N*d))
 
 np.set_printoptions(precision=5,suppress=True)
 print(x_feasible)
-plt.plot(x_feasible[0,:], x_feasible[1,:], 'ro')
-plt.axis([-4, 4, -4, 4])
-plt.show()
+# plt.plot(x_feasible[0,:], x_feasible[1,:], 'ro')
+# plt.axis([-4, 4, -4, 4])
+# plt.show()
 
 print("======= NOW STARTING LMPC CODE =========")
 # Initialize the LMPC
-Iteration = 10 #Need to define a priori the iterations as need to allocate memory
+Iteration = 20 #Need to define a priori the iterations as need to allocate memory
 TimeLMPC = Time + 10
 
-PointSS = 3             # Number of point per iteration to use into SS
-SSit = 1                # Number of Iterations to use into SS
-SSindex = N             # First point + 1 to be in SS (i.e. pick N --> use N+1 point of the previous iteration in SS)
-                        # IMPORTANT: Remember thing are indexed starting from 0
+PointSS = 5            # Number of point per iteration to use into SS
+SSit    = 2            # Number of Iterations to use into SS
+SSindex = N            # First point + 1 to be in SS (i.e. pick N --> use N+1 point of the previous iteration in SS)
+                       # IMPORTANT: Remember thing are indexed starting from 0
 
-SS   = 10000*np.ones((n, TimeLMPC+1, Iteration+SSit))
-Qfun = 10000*np.ones((TimeLMPC+1, Iteration+SSit))
+SS   = 10000*np.ones((n, TimeLMPC+1, Iteration))
+Qfun = 10000*np.ones((TimeLMPC+1, Iteration))
 
-x        = np.ones((n, TimeLMPC+1, Iteration+SSit))
-u        = np.ones((d, TimeLMPC+0, Iteration+SSit))
-Steps    = np.ones((Iteration+SSit))
+x        = np.ones((n, TimeLMPC+1, Iteration))
+u        = np.ones((d, TimeLMPC+0, Iteration))
+Steps    = np.ones((Iteration))
 Steps[0] = Time
 
 # Initialize the 0-th iteration with the first feasible trajectory
@@ -83,18 +83,26 @@ for i in range(0, SSit):
     Qfun[0:(Steps[0]+1),i] = ComputeCost(Q_LMPC, R_LMPC, x[:,0:(Steps[0]+1),0], u[:,0:(Steps[0]+0),0], np, int(Steps[0]))
 
 M_LMPC =  BuildMatCostLMPC(Q_LMPC, R_LMPC, N, np, linalg)
-for it in range(0, Iteration):
-    x[:, 0, SSit + it] = x[:, 0, 0]
-    # print("Before LMPC")
-    # print(Qfun)
-    print("Learning Iteration:", it)
-    # print("Safe Set:", SS)
-    [x[:,:, SSit+it], u[:,:, SSit+it], Steps[SSit+it] ] = LMPC(A, B, x, u, it, SSit, np, M_LMPC, G, E, F, b, PointSS, SSindex, FTOCP_LMPC, n, d, N, SS, Qfun, linalg, optimize, InitialGuess, GetPred, time)
-    # Update SS and Qfun after
-    SS[:, 0:(Steps[SSit+it] + 1), SSit+it] = x[:, 0:(Steps[SSit+it] + 1), SSit+it]
-    Qfun[0:(Steps[SSit+it] + 1), SSit+it] = ComputeCost(Q_LMPC, R_LMPC, x[:, 0:(Steps[SSit+it] + 1), SSit+it], u[:, 0:(Steps[SSit+it] + 0), SSit+it], np, int(Steps[SSit+it]))
+for it in range(SSit, Iteration):
+    x[:, 0, it] = x[:, 0, 0]
 
-print(Qfun[0,:])
+    print("Learning Iteration:", it)
+    start_time = time.clock()
+    [x[:,:, it], u[:,:, it], Steps[it] ] = LMPC(A, B, x, u, it, SSit, np, M_LMPC, G, E, F, b, PointSS, SSindex, FTOCP_LMPC, n, d, N, SS, Qfun, linalg, optimize, InitialGuess, GetPred, time)
+
+    # Update SS and Qfun after
+    SS[:, 0:(Steps[it] + 1), it] = x[:, 0:(Steps[it] + 1), it]
+    Qfun[0:(Steps[it] + 1), it] = ComputeCost(Q_LMPC, R_LMPC, x[:, 0:(Steps[it] + 1), it], u[:, 0:(Steps[it] + 0), it], np, int(Steps[it]))
+    print("Terminated Learning Iteration: ", it, "Time Steps: ", Steps[it] ,"Cost Improvement: ", Qfun[0, it-1] - Qfun[0, it], "Solver time: ", time.clock() - start_time)
+
+    if (Qfun[0, it-1] - Qfun[0, it]) < -10**(-10):
+        print("ERROR: The cost is increasing, check the code")
+        break
+    elif (Qfun[0, it-1] - Qfun[0, it]) < 10**(-10):
+        print("The LMPC has converged at iteration ", it, "The Optimal Cost is: ", Qfun[0, it])
+        break
+
+print("Iteration cost along the iterations: ",Qfun[0,0:it])
 # plt.plot(x[np.ix_([0],np.arange(Time+1))], x[np.ix_([1],np.arange(Time+1))], 'ro')
 # plt.axis([-4, 4, -4, 4])
 # plt.show()

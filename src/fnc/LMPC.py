@@ -10,60 +10,65 @@ def LMPC(A, B, x, u, it, SSit, np, M, G, E, F, b, PointSS, SSindex, FTOCP_LMPC, 
     TermPoint = np.zeros( (np.shape(E_LMPC)[0] ) )
     t=0
 
+    Costx    = 0
+    CostPred = 0
     CostSingleQP = np.zeros((SSit, PointSS))
+    R=1
+    Q=np.eye(2)
+
     while (norm > 10**(-10)):
         start_time = time.clock()
         for j in range(0, SSit):
             for i in range(0, PointSS):
 
-                TermPoint[ np.shape(TermPoint)[0]-n:np.shape(TermPoint)[0]] = SS[:, SSindex+i,it-j]
+                TermPoint[ np.shape(TermPoint)[0]-n:np.shape(TermPoint)[0]] = SS[:, SSindex+i,it-1-j]
 
-                [SolutionOpt, feasible, Cost] = FTOCP_LMPC(M, G_LMPC, E_LMPC, TermPoint, F, b, x[:, t, it+SSit], optimize, np, InitialGuess, linalg)
-                CostSingleQP[j,i] = Cost + Qfun[SSindex+i,it-j]
+                [SolutionOpt, feasible, Cost] = FTOCP_LMPC(M, G_LMPC, E_LMPC, TermPoint, F, b, x[:, t, it], optimize, np, InitialGuess, linalg)
 
+                CostSingleQP[j,i] = Cost + Qfun[SSindex+i,it-1-j]
 
         index= np.unravel_index(CostSingleQP.argmin(), CostSingleQP.shape)
         j_star = index[0]
         i_star = index[1]
-        # print("Optimal Terminal Point",SS[:, SSindex+i_star,it-j_star] , "Cost", CostSingleQP)
-        # print("Cost", CostSingleQP)
-        # print("Index", index, CostSingleQP[j_star,i_star])
 
-        TermPoint[ np.shape(TermPoint)[0]-n:np.shape(TermPoint)[0]] = SS[:, SSindex+i_star,it-j_star]
+        TermPoint[ np.shape(TermPoint)[0]-n:np.shape(TermPoint)[0]] = SS[:, SSindex+i_star,it-1-j_star]
 
-        [SolutionOpt, feasible, Cost] = FTOCP_LMPC(M, G_LMPC, E_LMPC, TermPoint, F, b, x[:, t, it+SSit], optimize, np, InitialGuess, linalg)
+        [SolutionOpt, feasible, Cost] = FTOCP_LMPC(M, G_LMPC, E_LMPC, TermPoint, F, b, x[:, t, it], optimize, np, InitialGuess, linalg)
         InitialGuess = SolutionOpt.x
         [xPred, uPred] = GetPred(SolutionOpt, n, d, N, np)
 
         if feasible == 1:
-            u[:, t, it+SSit] = uPred[0]
+            u[:, t, it] = uPred[0]
         else:
-            u[:, t, it+SSit] = 10000
-            print("ERROR: Optimization Problem Infeasible at time", t, "Norm:", norm, SS[:, SSindex+i_star,it-j_star], CostSingleQP)
+            u[:, t, it] = 10000
+            print("ERROR: Optimization Problem Infeasible at time", t, "Norm:", norm, SS[:, SSindex+i_star,it-1-j_star], CostSingleQP)
             norm = -1000000
             break
 
         # Apply the input to the system
-        x[:, t + 1, it+SSit] = np.dot(A[0], (x[:, t, it+SSit])) + np.dot(B[0], (u[:, t, it+SSit]))
+        x[:, t + 1, it] = np.dot(A[0], (x[:, t, it])) + np.dot(B[0], (u[:, t, it]))
         # print "Solver Time ", time.clock() - start_time, "seconds"
 
 
-        SSindex = SSindex  + i_star + 1
-
-        # print(xPred, i_star)
-        # print(SSindex, np.shape(SS))
-        norm = np.dot(x[:, t + 1, it].T, x[:, t + 1, it])
-        # print("Norm:", norm, "State:", x[:, t + 1, it])
+        if np.dot(SS[:, SSindex+i_star+1,it-1-j_star].T, SS[:, SSindex+i_star+1,it-1-j_star].T) > 1000:
+            Variable  = SS[:, SSindex+i_star+1,it-1-j_star]
+            Variable1 = SS[:, SSindex + i_star , it-1 - j_star]
+            SSindex = SSindex  + i_star + 1
+            norm = -1
+        else:
+            SSindex = SSindex + i_star + 1
+            norm = np.dot(x[:, t + 1, it].T, x[:, t + 1, it])
+            norm = 1
         t = t+1
 
     # Now apply the open-loop from last prediciton
     for i in range(1, N):
-        u[:, t, it+SSit] = uPred[i]
+        u[:, t, it] = uPred[i]
         # Apply the input to the system
-        x[:, t + 1, it+SSit] = np.dot(A[0], (x[:, t, it+SSit])) + np.dot(B[0], (u[:, t, it+SSit]))
+        x[:, t + 1, it] = np.dot(A[0], (x[:, t, it])) + np.dot(B[0], (u[:, t, it]))
         t = t + 1
 
-    return x[:,:,it+SSit], u[:,:,it+SSit], t-1
+    return x[:,:,it], u[:,:,it], t
 
 
 
