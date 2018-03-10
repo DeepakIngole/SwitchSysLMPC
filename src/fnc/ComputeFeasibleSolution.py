@@ -17,4 +17,4 @@ def ComputeFeasibleSolution(Time, A, B, M, G, F, E, b, x, u, n, d, N, optimize, 
         x[:, t + 1] = np.dot(A[0], (x[:, t])) + np.dot(B[0], (u[:, t]))
         print "Solver Time ", time.clock() - start_time, "seconds"
 
-    return x
+    return x, u

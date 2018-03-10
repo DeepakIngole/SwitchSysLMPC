@@ -16,6 +16,10 @@ def DefSystem(np):
 
     Q = np.eye(2)
 
-    R = np.array(0.5)
+    R = np.array(10)
 
-    return A, B, Q, R
+    Q_LMPC = np.eye(2)
+
+    R_LMPC = np.array(1)
+
+    return A, B, Q, R, Q_LMPC, R_LMPC
