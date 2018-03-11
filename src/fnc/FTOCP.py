@@ -19,8 +19,9 @@ def FTOCP(M, G, E, F, b, x0, optimize, np, z0, linalg):
     res_cons = optimize.minimize(cost, z0, jac=jac,constraints=cons, method='SLSQP', options=opt)
 
     #Need To Check Feasibility
-    EqConstrCheck = np.dot(E, x0) - np.dot(G,res_cons.x)
-    if ( (np.dot(EqConstrCheck, EqConstrCheck) < 1e-8) and ( ((b - np.dot(F,res_cons.x))).all > -1e-8)):
+    EqConstrCheck  = np.dot(E, x0) - np.dot(G,res_cons.x)
+    IneqConstCheck = b - np.dot(F,res_cons.x)
+    if ( (np.dot(EqConstrCheck, EqConstrCheck) < 1e-8) and ( IneqConstCheck > -1e-8).all() ):
         feasible = 1
     else:
         feasible = 0

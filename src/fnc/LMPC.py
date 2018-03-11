@@ -25,6 +25,7 @@ def LMPC(A, B, x, u, it, SSit, np, M, G, E, F, b, PointSS, SSindex, FTOCP_LMPC, 
 
                 [SolutionOpt, feasible, Cost] = FTOCP_LMPC(M, G_LMPC, E_LMPC, TermPoint, F, b, x[:, t, it], optimize, np, InitialGuess, linalg)
 
+                TotCost = Cost + Qfun[SSindex+i,it-1-j]
                 CostSingleQP[j,i] = Cost + Qfun[SSindex+i,it-1-j]
 
         index= np.unravel_index(CostSingleQP.argmin(), CostSingleQP.shape)
@@ -49,16 +50,11 @@ def LMPC(A, B, x, u, it, SSit, np, M, G, E, F, b, PointSS, SSindex, FTOCP_LMPC, 
         x[:, t + 1, it] = np.dot(A[0], (x[:, t, it])) + np.dot(B[0], (u[:, t, it]))
         # print "Solver Time ", time.clock() - start_time, "seconds"
 
-
         if np.dot(SS[:, SSindex+i_star+1,it-1-j_star].T, SS[:, SSindex+i_star+1,it-1-j_star].T) > 1000:
-            Variable  = SS[:, SSindex+i_star+1,it-1-j_star]
-            Variable1 = SS[:, SSindex + i_star , it-1 - j_star]
-            SSindex = SSindex  + i_star + 1
             norm = -1
         else:
-            SSindex = SSindex + i_star + 1
-            norm = np.dot(x[:, t + 1, it].T, x[:, t + 1, it])
             norm = 1
+        SSindex = SSindex + i_star + 1
         t = t+1
 
     # Now apply the open-loop from last prediciton
@@ -110,7 +106,8 @@ def FTOCP_LMPC(M, G, E, TPoint, F, b, x0, optimize, np, z0, linalg):
 
     #Need To Check Feasibility
     EqConstrCheck = TPoint + np.dot(E, x0) - np.dot(G,res_cons.x)
-    if ( (np.dot(EqConstrCheck, EqConstrCheck) < 1e-8) and ( ((b - np.dot(F,res_cons.x))).all > -1e-8)):
+    IneqConstCheck = b - np.dot(F, res_cons.x)
+    if ( (np.dot(EqConstrCheck, EqConstrCheck) < 1e-8) and ( IneqConstCheck > -1e-8).all() ):
         feasible = 1
         QPcost = cost(res_cons.x)
     else:
