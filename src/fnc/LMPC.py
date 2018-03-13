@@ -139,8 +139,8 @@ def FTOCP_LMPC(M, G, E, TPoint, F, b, x0, optimize, np, z0, linalg):
 
 def BuildMatEqConst_LMPC(G, E, N ,n ,d ,np):
     # Update the matrices for the Equality constraint in the LMPC. Now we need an extra row to constraint the terminal point to be equal to a point in SS
-    # The equality constraint has not the form G_LMPC*z = E_LMPC*x0 + TermPoint.
-    # Note that the vector TermPoint is updated in to constraint the system to a point in SS. This is done in the FTOCP_LMPC function
+    # The equality constraint has now the form: G_LMPC*z = E_LMPC*x0 + TermPoint.
+    # Note that the vector TermPoint is updated to constraint the predicted trajectory into a point in SS. This is done in the FTOCP_LMPC function
 
     TermCons = np.zeros((n, (N + 1) * n + N * d))
     TermCons[:, N * n:(N + 1) * n] = np.eye(n)
