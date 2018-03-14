@@ -4,7 +4,10 @@ from UtilityFunc import DefSystem
 from FTOCP import BuildMatEqConst, BuildMatCost, FTOCP, GetPred, BuildMatIneqConst
 from ComputeFeasibleSolution import ComputeFeasibleSolution
 from LMPCfunc import ComputeCost
-from LMPC import LMPC, BuildMatCostLMPC, FTOCP_LMPC, BuildMatEqConst_LMPC
+from LMPC import LMPC, BuildMatCostLMPC, FTOCP_LMPC, FTOCP_LMPC_Sol, BuildMatEqConst_LMPC
+from pathos.multiprocessing import ProcessingPool as Pool
+from functools import partial
+import datetime
 
 import numpy as np
 import time
@@ -66,9 +69,11 @@ InitialGuess = np.zeros(((N+1)*n+N*d))     # Initial guess for the QP solver
 print("========= STARTING LMPC CODE =========")
 
 # Setting the LMPC parameters
-Iteration = 20           # Max number of LMPC iterations (Need to define a priori the iterations as need to allocate memory)
-TimeLMPC  = Time + 10    # Max number of time steps at each LMPC iteration (If this number is exceed ---> ERROR)
-PointSS   = 2            # Number of point per iteration to use into SS
+Parallel  = 0            # Set to 1 for multicore
+p = Pool()               # Initialize the pool for multicore
+Iteration = 10           # Max number of LMPC iterations (Need to define a priori the iterations as need to allocate memory)
+TimeLMPC  = Time + 50    # Max number of time steps at each LMPC iteration (If this number is exceed ---> ERROR)
+PointSS   = 50           # Number of point per iteration to use into SS
 SSit      = 2            # Number of Iterations to use into SS
 toll      = 10**(-6)     # LMPC reaches convergence whenever J^{j} - J^{j+1} <= toll (i.e. the cost is not decreasing along the iterations)
 SSindex   = N            # This is the time index of the first point used in SS at time t = 0. (i.e. if SSindex = N --> use x_{N} as first terminal constraint)
@@ -106,11 +111,11 @@ M_LMPC =  BuildMatCostLMPC(Q_LMPC, R_LMPC, N, np, linalg) # Note that this will 
 for it in range(SSit, Iteration):
     x[:, 0, it] = x[:, 0, 0] # Set the initial conditions for the it-th iteration
 
-    start_time = time.clock() # Start the clock to time the it-th iteration
+    startTimer = datetime.datetime.now()
     [x[:,:, it], u[:,:, it], Steps[it] ] = LMPC(A, B, x, u, it, SSit, np, M_LMPC, G_LMPC, E_LMPC,  # Solve the LMPC problem at the i-th iteration
-                                                TermPoint, F, b, PointSS, SSindex, FTOCP_LMPC, n,
-                                                d, N, SS, Qfun, linalg, optimize, InitialGuess,
-                                                GetPred, time)
+                                                TermPoint, F, b, PointSS, SSindex, FTOCP_LMPC,
+                                                FTOCP_LMPC_Sol, n, d, N, SS, Qfun, linalg,
+                                                optimize, InitialGuess, GetPred, time, Parallel, p, partial)
 
     # Update SS and Qfun after the it-th iteration has been completed
     SS[:, 0:(Steps[it] + 1), it] = x[:, 0:(Steps[it] + 1), it]                                      # Update SS with the it-th closed loop trajectory
@@ -118,8 +123,10 @@ for it in range(SSit, Iteration):
                                                u[:, 0:(Steps[it] + 0), it], np, int(Steps[it]))
 
     # Print the results from the it-th iteration
+    endTimer = datetime.datetime.now()
+    deltaTimer = endTimer - startTimer
     print("Learning Iteration: %d, Time Steps %.1f, Iteration Cost: %.5f, Cost Improvement: %.7f, Iteration time: %.3fs, Avarage MIQP solver time: %.3fs"
-          %(it, Steps[it], Qfun[0, it], (Qfun[0, it-1] - Qfun[0, it]), ( time.clock() - start_time), ((time.clock() - start_time) / Steps[it])) )
+          %(it, Steps[it], Qfun[0, it], (Qfun[0, it-1] - Qfun[0, it]), ( (deltaTimer.total_seconds() )), (((deltaTimer.total_seconds() )) / Steps[it])) )
 
     # Run few checks
     if (Qfun[0, it-1] - Qfun[0, it]) < -10**(-10):  # Sanity check: Make sure that the cost is decreasing at each iteration
@@ -143,10 +150,10 @@ InitialGuess    = np.zeros((N_opt+1)*n+N_opt*d)                         # Pick t
 [res, feasible] = FTOCP(M_opt, G_opt, E_opt, F_opt, b_opt, x_opt[:, 0], # Solve the FTOCP for the long horizon
                         optimize, np, InitialGuess, linalg)
 [x_opt, u_opt]  = GetPred(res,n,d,N_opt, np)                            # Extract the optimal solution
-print("Optimal Cost from Infinite (very long) Horizon is: %.5f" %(np.dot((res.x).T, np.dot(M_opt, res.x))) )    # Finally print the cost for comparison
+print("Optimal Cost from Infinite (very long) Horizon is: %.5f" %(np.dot((res).T, np.dot(M_opt, res))) )    # Finally print the cost for comparison
 
 
-# # Print the optimal solution and the steady state solution of the LMPC
+# Print the optimal solution and the steady state solution of the LMPC
 # plt.plot(x[0,:,it], x[1,:,it], "r*", marker="*",  markersize=10)
 # plt.plot(x_opt[0,:], x_opt[1,:], 'bo', marker="o",  markersize=5)
 # plt.show()

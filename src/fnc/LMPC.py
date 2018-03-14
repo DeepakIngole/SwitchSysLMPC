@@ -1,4 +1,4 @@
-def LMPC(A, B, x, u, it, SSit, np, M, G_LMPC, E_LMPC, TermPoint, F, b, PointSS, SSindex, FTOCP_LMPC, n, d, N, SS, Qfun, linalg, optimize, InitialGuess, GetPred, time):
+def LMPC(A, B, x, u, it, SSit, np, M, G_LMPC, E_LMPC, TermPoint, F, b, PointSS, SSindex, FTOCP_LMPC, FTOCP_LMPC_Sol, n, d, N, SS, Qfun, linalg, optimize, InitialGuess, GetPred, time, Parallel, p, partial):
     # =============================================================================
     # ========== This functions run the it-th LMPC closed loop iteration ==========
     # =============================================================================
@@ -13,37 +13,55 @@ def LMPC(A, B, x, u, it, SSit, np, M, G_LMPC, E_LMPC, TermPoint, F, b, PointSS, 
 
     # Now initialize the main loop for computing the closed loop trajectory
     t = 0  # Set time = 0
+    SS_sel   = 10000*np.ones((n, PointSS*SSit))
+    Qfun_sel = 10000*np.ones( PointSS*SSit )
+    CostQP   = 10000*np.ones(PointSS*SSit)
+    SS_term  = 10000*np.ones((n,1))
+    i_sel    = np.arange(0, PointSS)
+
     while (ReachedTerminalPoint == 0):
         start_time = time.clock()         # Start the timer to compute the computational cost
-        for j in range(0, SSit):          # Loop over the latest SSit trajectories
-            for i in range(0, PointSS):   # Loop over the PointSS to select from the the (it-1-j)-th trajectory in SS
-                # Note that the time index SSindex indicates the first point that has to be considered from the (it-1-j)-th trajectory in SS
-                TermPoint[ np.shape(TermPoint)[0]-n:np.shape(TermPoint)[0]] = SS[:, SSindex+i,it-1-j]          # Update the constant vector for the terminal equality
-                [SolutionOpt, feasible, Cost] = FTOCP_LMPC(M, G_LMPC, E_LMPC, TermPoint, F, b, x[:, t, it],    # Solve the Finite Time Optimal Control Problem (FTOCP)
-                                                           optimize, np, InitialGuess, linalg)
+        for j in range(0, SSit):  # Loop over the latest SSit trajectories
+            SS_sel[:,j*PointSS + i_sel] = SS[:, SSindex + i_sel, it - 1 - j]
+            Qfun_sel[j * PointSS + i_sel] = Qfun[SSindex + i_sel, it - 1 - j]
 
-                [xPred, uPred] = GetPred(SolutionOpt, n, d, N, np)
-                CostSingleQP[j,i] = Cost + Qfun[SSindex+i,it-1-j]      # Store the cost of each QP in the loop
-                InputSingleQP[j,i, :, :] = uPred                       # Store the predicted input for each QP
-                FeasiSingleQP[j,i] = feasible                          # Stire the feasibility flag
+        if Parallel == 0:
+            for i in range(0, PointSS*SSit):          # Loop over the latest SSit trajectories
+                    # Note that the time index SSindex indicates the first point that has to be considered from the (it-1-j)-th trajectory in SS
+                    Cost = FTOCP_LMPC(FTOCP_LMPC_Sol, M, G_LMPC, E_LMPC, n, SSindex, it, SS_sel, TermPoint,        # Solve the Finite Time Optimal Control Problem (FTOCP)
+                                      F, b, x[:, t, it], optimize, np, InitialGuess, Qfun_sel, i)
 
-        # Look for the QP with the best cost
-        index= np.unravel_index(CostSingleQP.argmin(), CostSingleQP.shape)
+                    CostQP[i] = Cost       # Store the cost of each QP in the loop
+
+                    # Fun = partial(FTOCP_LMPC, FTOCP_LMPC_Sol, M, G_LMPC, E_LMPC, n, SSindex, it, SS_sel, TermPoint, F,
+                    #               b, x[:, t, it], optimize, np, InitialGuess, Qfun_sel)
+                    #
+                    # vec = np.arange(0, PointSS * SSit)
+                    # Res = p.map(Fun, vec)
+
+        else:
+            Fun = partial(FTOCP_LMPC, FTOCP_LMPC_Sol, M, G_LMPC, E_LMPC, n, SSindex, it, SS_sel, TermPoint, F, b,
+                          x[:, t, it], optimize, np, InitialGuess, Qfun_sel)
+            vec = np.arange(0, PointSS*SSit)
+            Res = p.map(Fun, vec)
+            CostQP = np.asarray(Res)
+
+        CostSingleQP = CostQP.reshape(SSit, PointSS)
+
+        index = np.unravel_index(CostSingleQP.argmin(), CostSingleQP.shape)
         j_star = index[0]
         i_star = index[1]
-
         # NOTE: The below commented code compute the optimal solution for the QP with the minimum cost. This can be used to compute the predicted trajectory.
         # Now this feature is not implemented in the code.
-        # TermPoint[ np.shape(TermPoint)[0]-n:np.shape(TermPoint)[0]] = SS[:, SSindex+i_star,it-1-j_star]
-        #
-        # [SolutionOpt, feasible, Cost] = FTOCP_LMPC(M, G_LMPC, E_LMPC, TermPoint, F, b, x[:, t, it], optimize, np, InitialGuess, linalg)
-        # InitialGuess = SolutionOpt.x
-        # [xPred, uPred] = GetPred(SolutionOpt, n, d, N, np)
+        SS_term[:,0] = SS[:, SSindex+i_star,it-1-j_star]
+        [Sol, Feasible, Cost] = FTOCP_LMPC_Sol(M, G_LMPC, E_LMPC, n, SSindex, it, SS_term, TermPoint,         # Solve the Finite Time Optimal Control Problem (FTOCP)
+                                        F, b, x[:, t, it], optimize, np, InitialGuess, [0], 0)
+        [xPred, uPred] = GetPred(Sol, n, d, N, np)
 
         # Apply the best input.
         # First check if the best input was feasible (Note that if the QP is not feasible --> cost set to 10000 --> If best problem not feasible all QP were not feasible)
-        if FeasiSingleQP[j_star, i_star] == 1:
-            u[:, t, it] = InputSingleQP[j_star, i_star, : , 0]                 # Extract the best input
+        if Feasible == 1:
+            u[:, t, it] = uPred[0]                 # Extract the best input
         else:
             u[:, t, it] = 10000                                                # If not feasible set input to high number
             print("ERROR: Optimization Problem Infeasible at time", t,         # Print an error message
@@ -71,7 +89,7 @@ def LMPC(A, B, x, u, it, SSit, np, M, G_LMPC, E_LMPC, TermPoint, F, b, PointSS, 
     # Now apply the open-loop from last prediction. This is needed to make sure that the closed-loop trajectory does not terminated further from the origin at each iteration.
     # Here we could have solved few QPs with different time horizons. This issue comes from the fact that we want to mimic an infinite horizon control problem.
     for i in range(1, N):
-        u[:, t, it] = InputSingleQP[j_star, i_star, : , i]                              # Extract the input from the predicted ones
+        u[:, t, it] = uPred[i]                              # Extract the input from the predicted ones
         x[:, t + 1, it] = np.dot(A[0], (x[:, t, it])) + np.dot(B[0], (u[:, t, it]))     # Apply the input to the system
         t = t + 1                                                                       # Update time index for the simulation
 
@@ -95,7 +113,13 @@ def BuildMatCostLMPC(Q,R,N,np,linalg):
     return M
 
 
-def FTOCP_LMPC(M, G, E, TPoint, F, b, x0, optimize, np, z0, linalg):
+def FTOCP_LMPC(FTOCP_LMPC_Sol, M, G, E, n, SSindex, it, SS_sel, TermPoint, F, b, x0, optimize, np, z0, Qfun_sel, i):
+    [Sol, feasible, QPcost] = FTOCP_LMPC_Sol(M, G, E, n, SSindex, it, SS_sel, TermPoint, F, b, x0, optimize, np, z0, Qfun_sel, i)
+
+    return QPcost
+
+def FTOCP_LMPC_Sol(M, G, E, n, SSindex, it, SS_sel, TermPoint, F, b, x0, optimize, np, z0, Qfun_sel, i):
+    TermPoint[np.shape(TermPoint)[0] - n:np.shape(TermPoint)[0]] = SS_sel[:, i]  # Update the constant vector for the terminal equality
 
     def cost(z):
         return ( np.dot(z.T, np.dot(M, z)) )
@@ -105,7 +129,7 @@ def FTOCP_LMPC(M, G, E, TPoint, F, b, x0, optimize, np, z0, linalg):
 
 
     cons =({'type':'eq',
-            'fun':lambda z:  TPoint + np.dot(E, x0)- np.dot(G,z), # TerminalPoint + E*x0 - Gz = 0
+            'fun':lambda z:  TermPoint + np.dot(E, x0)- np.dot(G,z), # TerminalPoint + E*x0 - Gz = 0
             'jac':lambda z: -G},
            {'type':'ineq',
             'fun':lambda z: b - np.dot(F,z), # b - Ax => 0 PAY ATTENTION HERE DIFFERENT CONVETION FROM USUAL
@@ -120,11 +144,11 @@ def FTOCP_LMPC(M, G, E, TPoint, F, b, x0, optimize, np, z0, linalg):
     # ====================================================================
     # There is a small bug in optimize, whenever SLSQP is used and simple box constraint on individual variables are treated
     # as inequality constraint the solver does not detect infeasibility. The cleanest solution is to check feasibility a posteriori
-    EqConstrCheck = TPoint + np.dot(E, x0) - np.dot(G,res_cons.x)
+    EqConstrCheck = TermPoint + np.dot(E, x0) - np.dot(G,res_cons.x)
     IneqConstCheck = b - np.dot(F, res_cons.x)
     if ( (np.dot(EqConstrCheck, EqConstrCheck) < 1e-8) and ( IneqConstCheck > -1e-8).all() ):
         feasible = 1
-        QPcost = cost(res_cons.x)
+        QPcost = cost(res_cons.x) + Qfun_sel[i]
     else:
         feasible = 0
         QPcost = 10000
@@ -134,8 +158,7 @@ def FTOCP_LMPC(M, G, E, TPoint, F, b, x0, optimize, np, z0, linalg):
         # print( ( ((b - np.dot(F,res_cons.x))).all > -1e-8) )
         # print(b-np.dot(F,res_cons.x))
 
-    return res_cons, feasible, QPcost
-
+    return res_cons.x, feasible, QPcost
 
 def BuildMatEqConst_LMPC(G, E, N ,n ,d ,np):
     # Update the matrices for the Equality constraint in the LMPC. Now we need an extra row to constraint the terminal point to be equal to a point in SS

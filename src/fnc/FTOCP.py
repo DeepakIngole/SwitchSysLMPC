@@ -31,7 +31,7 @@ def FTOCP(M, G, E, F, b, x0, optimize, np, z0, linalg):
         print( ( ((b - np.dot(F,res_cons.x))).all > -1e-8) )
         print(b-np.dot(F,res_cons.x))
 
-    return res_cons, feasible
+    return res_cons.x, feasible
 
 def BuildMatEqConst(A ,B ,N ,n ,d ,np):
     # Buil matrices for optimization (Convention from Chapter 15.2 Borrelli, Bemporad and Morari MPC book)
@@ -138,7 +138,7 @@ def BuildMatCost(Q, R, P, N, linalg):
     return M
 
 def GetPred(Solution,n,d,N, np):
-    xPred = np.squeeze(np.transpose(np.reshape((Solution.x[np.arange(n*(N+1))]),(N+1,n))))
-    uPred = np.squeeze(np.transpose(np.reshape((Solution.x[n*(N+1)+np.arange(d*N)]),(d, N))))
+    xPred = np.squeeze(np.transpose(np.reshape((Solution[np.arange(n*(N+1))]),(N+1,n))))
+    uPred = np.squeeze(np.transpose(np.reshape((Solution[n*(N+1)+np.arange(d*N)]),(d, N))))
 
     return xPred, uPred

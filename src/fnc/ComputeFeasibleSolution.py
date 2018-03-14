@@ -3,7 +3,7 @@ def ComputeFeasibleSolution(Time, A, B, M, G, F, E, b, x, u, n, d, N, optimize, 
         # Solve the Finite Time Optimal Control Problem (FTOCP)
         start_time = time.clock()
         [SolutionOpt, feasible] = FTOCP(M, G, E, F, b, x[:, t], optimize, np, InitialGuess, linalg)
-        InitialGuess = SolutionOpt.x
+        InitialGuess = SolutionOpt
         [xPred, uPred] = GetPred(SolutionOpt, n, d, N, np)
 
         if feasible == 1:
