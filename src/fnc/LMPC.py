@@ -11,52 +11,46 @@ def LMPC(A, B, x, u, it, SSit, np, M, G_LMPC, E_LMPC, TermPoint, F, b, PointSS, 
     InputSingleQP = np.zeros((SSit, PointSS, d, N))  # This vector stores the predicted input of each of the (PointSS * SSit) QPs
     FeasiSingleQP = np.zeros((SSit, PointSS))        # This vector stores the feasibility flag each of the (PointSS * SSit) QPs
 
+    # Initilize subset of SS
+    SS_sel   = 10000*np.ones((n, PointSS*SSit))       # This vector will contain PointSS points from each of the last SSit-th trajecotries in SS
+    Qfun_sel = 10000*np.ones( PointSS*SSit )          # This vector will contain cost associated with the PointSS points from each of the last SSit-th trajecotries in SS
+    CostQP   = 10000*np.ones(PointSS*SSit)            # This vector will contain the cost of each QP that we will solve
+    SS_term  = 10000*np.ones((n,1))                   # This vector will contain the terminal point associated with the best cost from CostQP
+
     # Now initialize the main loop for computing the closed loop trajectory
     t = 0  # Set time = 0
-    SS_sel   = 10000*np.ones((n, PointSS*SSit))
-    Qfun_sel = 10000*np.ones( PointSS*SSit )
-    CostQP   = 10000*np.ones(PointSS*SSit)
-    SS_term  = 10000*np.ones((n,1))
-    i_sel    = np.arange(0, PointSS)
-
     while (ReachedTerminalPoint == 0):
-        start_time = time.clock()         # Start the timer to compute the computational cost
-        for j in range(0, SSit):  # Loop over the latest SSit trajectories
-            SS_sel[:,j*PointSS + i_sel] = SS[:, SSindex + i_sel, it - 1 - j]
-            Qfun_sel[j * PointSS + i_sel] = Qfun[SSindex + i_sel, it - 1 - j]
+        # Loop over the latest SSit trajectories to create a vector of terminal constraints
+        for j in range(0, SSit):
+            SS_sel[:,j*PointSS + np.arange(0, PointSS)] = SS[:, SSindex + np.arange(0, PointSS), it - 1 - j]       # Store the terminal point from the (it - 1 - j)-th iteration in the vector SS_sel
+            Qfun_sel[j * PointSS + np.arange(0, PointSS)] = Qfun[SSindex + np.arange(0, PointSS), it - 1 - j]      # Store cost associated with the terminal point from the (it - 1 - j)-th iteration in the vector Qfun_sel
 
         if Parallel == 0:
-            for i in range(0, PointSS*SSit):          # Loop over the latest SSit trajectories
+            for i in range(0, PointSS*SSit):          # Loop over the latest PointSS*SSit points
                     # Note that the time index SSindex indicates the first point that has to be considered from the (it-1-j)-th trajectory in SS
-                    Cost = FTOCP_LMPC(FTOCP_LMPC_Sol, M, G_LMPC, E_LMPC, n, SSindex, it, SS_sel, TermPoint,        # Solve the Finite Time Optimal Control Problem (FTOCP)
+                    CostQP[i] = FTOCP_LMPC(FTOCP_LMPC_Sol, M, G_LMPC, E_LMPC, n, SSindex, it, SS_sel, TermPoint,        # Solve the Finite Time Optimal Control Problem (FTOCP)
                                       F, b, x[:, t, it], optimize, np, InitialGuess, Qfun_sel, i)
 
-                    CostQP[i] = Cost       # Store the cost of each QP in the loop
-
-                    # Fun = partial(FTOCP_LMPC, FTOCP_LMPC_Sol, M, G_LMPC, E_LMPC, n, SSindex, it, SS_sel, TermPoint, F,
-                    #               b, x[:, t, it], optimize, np, InitialGuess, Qfun_sel)
-                    #
-                    # vec = np.arange(0, PointSS * SSit)
-                    # Res = p.map(Fun, vec)
-
         else:
-            Fun = partial(FTOCP_LMPC, FTOCP_LMPC_Sol, M, G_LMPC, E_LMPC, n, SSindex, it, SS_sel, TermPoint, F, b,
-                          x[:, t, it], optimize, np, InitialGuess, Qfun_sel)
-            vec = np.arange(0, PointSS*SSit)
-            Res = p.map(Fun, vec)
-            CostQP = np.asarray(Res)
 
-        CostSingleQP = CostQP.reshape(SSit, PointSS)
+            Fun = partial(FTOCP_LMPC, FTOCP_LMPC_Sol, M, G_LMPC, E_LMPC, n, SSindex, it, SS_sel, TermPoint,         # Create the function to iterate
+                          F, b, x[:, t, it], optimize, np, InitialGuess, Qfun_sel)
+            index = np.arange(0, PointSS*SSit)                                                                 # Create the index vector
+            Res = p.map(Fun, index)                                                                            # Run the process in parallel
+            CostQP = np.asarray(Res)                                                                                # Convert the result from list to array
 
-        index = np.unravel_index(CostSingleQP.argmin(), CostSingleQP.shape)
+        CostSingleQP = CostQP.reshape(SSit, PointSS)                            # Reshape in the more natural format: (Iteration) x (Time)
+        index = np.unravel_index(CostSingleQP.argmin(), CostSingleQP.shape)     # Select the indices (Iteration) x (Time) associated with the minimum cost
         j_star = index[0]
         i_star = index[1]
-        # NOTE: The below commented code compute the optimal solution for the QP with the minimum cost. This can be used to compute the predicted trajectory.
-        # Now this feature is not implemented in the code.
-        SS_term[:,0] = SS[:, SSindex+i_star,it-1-j_star]
-        [Sol, Feasible, Cost] = FTOCP_LMPC_Sol(M, G_LMPC, E_LMPC, n, SSindex, it, SS_term, TermPoint,         # Solve the Finite Time Optimal Control Problem (FTOCP)
+
+        SS_term[:,0] = SS[:, SSindex+i_star,it-1-j_star]                        # Pick the terminal point associated with the best cost
+
+        # Solve the Finite Time Optimal Control Problem (FTOCP): This time get the optimal input and also the predicted trajectory
+        [Sol, Feasible, Cost] = FTOCP_LMPC_Sol(M, G_LMPC, E_LMPC, n, SSindex, it, SS_term, TermPoint,
                                         F, b, x[:, t, it], optimize, np, InitialGuess, [0], 0)
-        [xPred, uPred] = GetPred(Sol, n, d, N, np)
+
+        [xPred, uPred] = GetPred(Sol, n, d, N, np)          # Unpack the predicted trajectory
 
         # Apply the best input.
         # First check if the best input was feasible (Note that if the QP is not feasible --> cost set to 10000 --> If best problem not feasible all QP were not feasible)

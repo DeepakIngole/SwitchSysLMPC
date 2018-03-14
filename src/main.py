@@ -69,11 +69,11 @@ InitialGuess = np.zeros(((N+1)*n+N*d))     # Initial guess for the QP solver
 print("========= STARTING LMPC CODE =========")
 
 # Setting the LMPC parameters
-Parallel  = 0            # Set to 1 for multicore
+Parallel  = 1            # Set to 1 for multicore
 p = Pool()               # Initialize the pool for multicore
 Iteration = 10           # Max number of LMPC iterations (Need to define a priori the iterations as need to allocate memory)
 TimeLMPC  = Time + 50    # Max number of time steps at each LMPC iteration (If this number is exceed ---> ERROR)
-PointSS   = 50           # Number of point per iteration to use into SS
+PointSS   = 5           # Number of point per iteration to use into SS
 SSit      = 2            # Number of Iterations to use into SS
 toll      = 10**(-6)     # LMPC reaches convergence whenever J^{j} - J^{j+1} <= toll (i.e. the cost is not decreasing along the iterations)
 SSindex   = N            # This is the time index of the first point used in SS at time t = 0. (i.e. if SSindex = N --> use x_{N} as first terminal constraint)
