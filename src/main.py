@@ -70,11 +70,11 @@ print("========= STARTING LMPC CODE =========")
 
 # Setting the LMPC parameters
 Parallel  = 1            # Set to 1 for multicore
-p = Pool()               # Initialize the pool for multicore
+p = Pool(4)              # Initialize the pool for multicore
 Iteration = 10           # Max number of LMPC iterations (Need to define a priori the iterations as need to allocate memory)
 TimeLMPC  = Time + 50    # Max number of time steps at each LMPC iteration (If this number is exceed ---> ERROR)
-PointSS   = 5           # Number of point per iteration to use into SS
-SSit      = 2            # Number of Iterations to use into SS
+PointSS   = 10           # Number of point per iteration to use into SS
+SSit      = 4            # Number of Iterations to use into SS
 toll      = 10**(-6)     # LMPC reaches convergence whenever J^{j} - J^{j+1} <= toll (i.e. the cost is not decreasing along the iterations)
 SSindex   = N            # This is the time index of the first point used in SS at time t = 0. (i.e. if SSindex = N --> use x_{N} as first terminal constraint)
                          # IMPORTANT: Remember thing are indexed starting from 0 ---> have same index as state trajectory (i.e. for i = 0 pick x_0 etc ...)
