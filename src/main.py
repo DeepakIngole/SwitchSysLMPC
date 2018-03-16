@@ -86,6 +86,7 @@ x        = np.ones((n, TimeLMPC+1, Iteration))    # Closed loop trajectory
 u        = np.ones((d, TimeLMPC+0, Iteration))    # Input associated with closed loop trajectory
 Steps    = np.ones((Iteration))                   # This vector collests the actual time at which each iteratin is completed (Remember: it was needed to pre-allocate memory)
 
+
 # Now given the number of iteration SSit that we want to use in the LMPC we initialize the SS and Qfun
 for i in range(0, SSit):
     Steps[i] = Time                                                   # Set the number of steps of the i-th trajectory (This is equal to time as the i-th trajectory is the first feasible solution previously computed
