@@ -1,4 +1,4 @@
-def LMPC(A, B, x, u, it, SSit, np, M, G_LMPC, E_LMPC, TermPoint, F, b, PointSS, SSindex, FTOCP_LMPC, FTOCP_LMPC_Sol, n, d, N, SS, Qfun, linalg, optimize, InitialGuess, GetPred, time, Parallel, p, partial):
+def LMPC(A, B, x, u, it, SSit, np, M, G_LMPC, E_LMPC, TermPoint, M_sparse, G_LMPC_sparse, E_LMPC_sparse, F, F_sparse, b, PointSS, SSindex, FTOCP_LMPC, FTOCP_LMPC_Sol, FTOCP_LMPC_CVX, FTOCP_LMPC_CVX_Cost, n, d, N, SS, Qfun, linalg, optimize, InitialGuess, GetPred, time, Parallel, p, partial, CVX, spmatrix, qp, matrix):
     # =============================================================================
     # ========== This functions run the it-th LMPC closed loop iteration ==========
     # =============================================================================
@@ -28,16 +28,27 @@ def LMPC(A, B, x, u, it, SSit, np, M, G_LMPC, E_LMPC, TermPoint, F, b, PointSS, 
         if Parallel == 0:
             for i in range(0, PointSS*SSit):          # Loop over the latest PointSS*SSit points
                     # Note that the time index SSindex indicates the first point that has to be considered from the (it-1-j)-th trajectory in SS
-                    CostQP[i] = FTOCP_LMPC(FTOCP_LMPC_Sol, M, G_LMPC, E_LMPC, n, SSindex, it, SS_sel, TermPoint,        # Solve the Finite Time Optimal Control Problem (FTOCP)
+                    if CVX == 0:
+                        CostQP[i] = FTOCP_LMPC(FTOCP_LMPC_Sol, M, G_LMPC, E_LMPC, n, SSindex, it, SS_sel, TermPoint,        # Solve the Finite Time Optimal Control Problem (FTOCP)
                                       F, b, x[:, t, it], optimize, np, InitialGuess, Qfun_sel, i)
+                    else:
+                        _, _, CostQP[i] = FTOCP_LMPC_CVX(M_sparse, G_LMPC_sparse, E_LMPC_sparse, n, SS_sel, F_sparse, b,
+                                                   x[:, t, it], np, Qfun_sel, qp, matrix, spmatrix, i)
+
 
         else:
-
-            Fun = partial(FTOCP_LMPC, FTOCP_LMPC_Sol, M, G_LMPC, E_LMPC, n, SSindex, it, SS_sel, TermPoint,         # Create the function to iterate
-                          F, b, x[:, t, it], optimize, np, InitialGuess, Qfun_sel)
-            index = np.arange(0, PointSS*SSit)                                                                 # Create the index vector
-            Res = p.map(Fun, index)                                                                            # Run the process in parallel
-            CostQP = np.asarray(Res)                                                                                # Convert the result from list to array
+            if CVX == 0:
+                Fun = partial(FTOCP_LMPC, FTOCP_LMPC_Sol, M, G_LMPC, E_LMPC, n, SSindex, it, SS_sel, TermPoint,         # Create the function to iterate
+                              F, b, x[:, t, it], optimize, np, InitialGuess, Qfun_sel)
+                index = np.arange(0, PointSS*SSit)                                                                 # Create the index vector
+                Res = p.map(Fun, index)                                                                            # Run the process in parallel
+                CostQP = np.asarray(Res)                                                                                # Convert the result from list to array
+            else:
+                Fun = partial(FTOCP_LMPC_CVX_Cost, M_sparse, G_LMPC_sparse, E_LMPC_sparse, n, SS_sel, F_sparse, b,
+                                                   x[:, t, it], np, Qfun_sel, qp, matrix, spmatrix)
+                index = np.arange(0, PointSS*SSit)                                                                 # Create the index vector
+                Res = p.map(Fun, index)                                                                            # Run the process in parallel
+                CostQP = np.asarray(Res)
 
         CostSingleQP = CostQP.reshape(SSit, PointSS)                            # Reshape in the more natural format: (Iteration) x (Time)
         index = np.unravel_index(CostSingleQP.argmin(), CostSingleQP.shape)     # Select the indices (Iteration) x (Time) associated with the minimum cost
@@ -47,8 +58,13 @@ def LMPC(A, B, x, u, it, SSit, np, M, G_LMPC, E_LMPC, TermPoint, F, b, PointSS, 
         SS_term[:,0] = SS[:, SSindex+i_star,it-1-j_star]                        # Pick the terminal point associated with the best cost
 
         # Solve the Finite Time Optimal Control Problem (FTOCP): This time get the optimal input and also the predicted trajectory
-        [Sol, Feasible, Cost] = FTOCP_LMPC_Sol(M, G_LMPC, E_LMPC, n, SSindex, it, SS_term, TermPoint,
-                                        F, b, x[:, t, it], optimize, np, InitialGuess, [0], 0)
+        if CVX ==0:
+            [Sol, Feasible, _] = FTOCP_LMPC_Sol(M, G_LMPC, E_LMPC, n, SS_term, TermPoint,
+                                            F, b, x[:, t, it], optimize, np, InitialGuess, [0], 0)
+        else:
+            [Sol, Feasible, _] = FTOCP_LMPC_CVX(M_sparse, G_LMPC_sparse, E_LMPC_sparse, n, SS_term, F_sparse, b,
+                                                   x[:, t, it], np, Qfun_sel, qp, matrix, spmatrix, 0)
+
 
         [xPred, uPred] = GetPred(Sol, n, d, N, np)          # Unpack the predicted trajectory
 
@@ -58,8 +74,10 @@ def LMPC(A, B, x, u, it, SSit, np, M, G_LMPC, E_LMPC, TermPoint, F, b, PointSS, 
             u[:, t, it] = uPred[0]                 # Extract the best input
         else:
             u[:, t, it] = 10000                                                # If not feasible set input to high number
+            print("CostQP", CostQP)
             print("ERROR: Optimization Problem Infeasible at time", t,         # Print an error message
                   SS[:, SSindex+i_star,it-1-j_star], CostSingleQP)
+
             ReachedTerminalPoint = 1                                           # Terminate the loop
             break
 
@@ -91,7 +109,7 @@ def LMPC(A, B, x, u, it, SSit, np, M, G_LMPC, E_LMPC, TermPoint, F, b, PointSS, 
 
 
 
-def BuildMatCostLMPC(Q,R,N,np,linalg):
+def BuildMatCostLMPC(Q, R, N, linalg, np, spmatrix):
     b = [Q] * (N)
     Mx = linalg.block_diag(*b)
 
@@ -103,16 +121,17 @@ def BuildMatCostLMPC(Q,R,N,np,linalg):
     # For sanity check
     # print("Cost Matrix")
     # print(M)
+    M_sparse = spmatrix(M[np.nonzero(M)], np.nonzero(M)[0], np.nonzero(M)[1], M.shape)
 
-    return M
+    return M, M_sparse
 
 
 def FTOCP_LMPC(FTOCP_LMPC_Sol, M, G, E, n, SSindex, it, SS_sel, TermPoint, F, b, x0, optimize, np, z0, Qfun_sel, i):
-    [Sol, feasible, QPcost] = FTOCP_LMPC_Sol(M, G, E, n, SSindex, it, SS_sel, TermPoint, F, b, x0, optimize, np, z0, Qfun_sel, i)
+    [Sol, feasible, QPcost] = FTOCP_LMPC_Sol(M, G, E, n, SS_sel, TermPoint, F, b, x0, optimize, np, z0, Qfun_sel, i)
 
     return QPcost
 
-def FTOCP_LMPC_Sol(M, G, E, n, SSindex, it, SS_sel, TermPoint, F, b, x0, optimize, np, z0, Qfun_sel, i):
+def FTOCP_LMPC_Sol(M, G, E, n, SS_sel, TermPoint, F, b, x0, optimize, np, z0, Qfun_sel, i):
     TermPoint[np.shape(TermPoint)[0] - n:np.shape(TermPoint)[0]] = SS_sel[:, i]  # Update the constant vector for the terminal equality
 
     def cost(z):
@@ -120,7 +139,6 @@ def FTOCP_LMPC_Sol(M, G, E, n, SSindex, it, SS_sel, TermPoint, F, b, x0, optimiz
 
     def jac(z):
         return 2 * np.dot(z.T, M)
-
 
     cons =({'type':'eq',
             'fun':lambda z:  TermPoint + np.dot(E, x0)- np.dot(G,z), # TerminalPoint + E*x0 - Gz = 0
@@ -154,7 +172,42 @@ def FTOCP_LMPC_Sol(M, G, E, n, SSindex, it, SS_sel, TermPoint, F, b, x0, optimiz
 
     return res_cons.x, feasible, QPcost
 
-def BuildMatEqConst_LMPC(G, E, N ,n ,d ,np):
+def FTOCP_LMPC_CVX(M, G, E, n, SS_sel, F, b, x0, np, Qfun_sel, qp, matrix, spmatrix, i):
+    ind = range(E.size[0] - n, E.size[0])
+    TermPoint_sparse = spmatrix(SS_sel[:, i], ind, [0, 0])
+
+    q = matrix(0.0, (M.size[0], 1))
+
+    res_cons = qp(M, q,  F, matrix(b), G, E* matrix(x0)+TermPoint_sparse)
+
+    if res_cons['status'] == 'optimal':
+        feasible = 1
+        # IMPORTANT: Need to put a 2 because you have the 1/2 in front of the cost
+        Cost = 2*res_cons['primal objective'] + Qfun_sel[i]
+    else:
+        feasible = 0
+        Cost = 10000
+
+    return np.squeeze(res_cons['x']), feasible, Cost
+
+def FTOCP_LMPC_CVX_Cost(M, G, E, n, SS_sel, F, b, x0, np, Qfun_sel, qp, matrix, spmatrix, i):
+    ind = range(E.size[0] - n, E.size[0])
+    TermPoint_sparse = spmatrix(SS_sel[:, i], ind, [0, 0])
+    q = matrix(0.0, (M.size[0], 1))
+
+    res_cons = qp(M, q,  F, matrix(b), G, E* matrix(x0)+TermPoint_sparse)
+
+    if res_cons['status'] == 'optimal':
+        feasible = 1
+        # IMPORTANT: Need to put a 2 because you have the 1/2 in front of the cost
+        Cost = 2*res_cons['primal objective'] + Qfun_sel[i]
+    else:
+        feasible = 0
+        Cost = 10000
+
+    return Cost
+
+def BuildMatEqConst_LMPC(G, E, N ,n ,d ,np, spmatrix):
     # Update the matrices for the Equality constraint in the LMPC. Now we need an extra row to constraint the terminal point to be equal to a point in SS
     # The equality constraint has now the form: G_LMPC*z = E_LMPC*x0 + TermPoint.
     # Note that the vector TermPoint is updated to constraint the predicted trajectory into a point in SS. This is done in the FTOCP_LMPC function
@@ -167,4 +220,7 @@ def BuildMatEqConst_LMPC(G, E, N ,n ,d ,np):
 
     TermPoint = np.zeros((np.shape(E_LMPC)[0]))
 
-    return G_LMPC, E_LMPC, TermPoint
+    G_LMPC_sparse = spmatrix(G_LMPC[np.nonzero(G_LMPC)], np.nonzero(G_LMPC)[0], np.nonzero(G_LMPC)[1], G_LMPC.shape)
+    E_LMPC_sparse = spmatrix(E_LMPC[np.nonzero(E_LMPC)], np.nonzero(E_LMPC)[0], np.nonzero(E_LMPC)[1], E_LMPC.shape)
+
+    return G_LMPC, E_LMPC, TermPoint, G_LMPC_sparse, E_LMPC_sparse

@@ -1,3 +1,15 @@
+def FTOCP_CVX(M, G, E, F, b, x0, optimize, np, z0, linalg, qp, spmatrix, matrix):
+    q = matrix(0.0, (M.size[0], 1))
+    res_cons  = qp(M, q, F, matrix(b), G, E* matrix(x0))
+    if res_cons['status'] == 'optimal':
+        feasible = 1
+    else:
+        feasible = 0
+
+    return np.squeeze(res_cons['x']), feasible
+
+
+
 def FTOCP(M, G, E, F, b, x0, optimize, np, z0, linalg):
 
     def cost(z):
@@ -33,7 +45,7 @@ def FTOCP(M, G, E, F, b, x0, optimize, np, z0, linalg):
 
     return res_cons.x, feasible
 
-def BuildMatEqConst(A ,B ,N ,n ,d ,np):
+def BuildMatEqConst(A ,B ,N ,n ,d ,np, spmatrix):
     # Buil matrices for optimization (Convention from Chapter 15.2 Borrelli, Bemporad and Morari MPC book)
     # We are going to build our optimization vector z \in \mathbb{R}^((N+1) \dot n \dot N \dot d), note that this vector
     # stucks the predicted trajectory x_{k|t} \forall k = t, \ldots, t+N+1 over the horizon and
@@ -64,9 +76,11 @@ def BuildMatEqConst(A ,B ,N ,n ,d ,np):
     # print("Print E")
     # print(E)
 
-    return G, E
+    G_sparse = spmatrix(G[np.nonzero(G)], np.nonzero(G)[0], np.nonzero(G)[1], G.shape)
+    E_sparse = spmatrix(E[np.nonzero(E)], np.nonzero(E)[0], np.nonzero(E)[1], E.shape)
+    return G, E, G_sparse, E_sparse
 
-def BuildMatIneqConst(N, n, np, linalg):
+def BuildMatIneqConst(N, n, np, linalg, spmatrix):
     # Buil the matrices for the state constraint in each region. In the region i we want Fx[i]x <= bx[b]
     Fx = np.array([[[ 1., 0.],
                     [-1., 0.],
@@ -98,7 +112,6 @@ def BuildMatIneqConst(N, n, np, linalg):
                     [ 1.]]])
 
     # Now stuck the constraint matrices to express them in the form Fz<=b. Note that z collects states and inputs
-
     # Let's start by computing the submatrix of F relates with the state
     rep_a = [Fx[0]] * (N)
     Mat = linalg.block_diag(*rep_a)
@@ -120,9 +133,12 @@ def BuildMatIneqConst(N, n, np, linalg):
     F = np.vstack( ( Dummy1, Dummy2) )
     b = np.hstack((bxtot, butot))
 
-    return F, b
 
-def BuildMatCost(Q, R, P, N, linalg):
+    F_sparse = spmatrix(F[np.nonzero(F)], np.nonzero(F)[0], np.nonzero(F)[1], F.shape)
+
+    return F, b, F_sparse
+
+def BuildMatCost(Q, R, P, N, linalg, np, spmatrix):
     b = [Q] * (N)
     Mx = linalg.block_diag(*b)
 
@@ -131,11 +147,9 @@ def BuildMatCost(Q, R, P, N, linalg):
 
     M = linalg.block_diag(Mx, P, Mu)
 
-    # For sanity check
-    # print("Cost Matrix")
-    # print(M)
+    M_sparse = spmatrix(M[np.nonzero(M)], np.nonzero(M)[0], np.nonzero(M)[1], M.shape)
 
-    return M
+    return M, M_sparse
 
 def GetPred(Solution,n,d,N, np):
     xPred = np.squeeze(np.transpose(np.reshape((Solution[np.arange(n*(N+1))]),(N+1,n))))

@@ -1,27 +1,31 @@
 import sys
 sys.path.append('fnc')
 from UtilityFunc import DefSystem
-from FTOCP import BuildMatEqConst, BuildMatCost, FTOCP, GetPred, BuildMatIneqConst
+from FTOCP import BuildMatEqConst, BuildMatCost, FTOCP, GetPred, BuildMatIneqConst, FTOCP_CVX
 from ComputeFeasibleSolution import ComputeFeasibleSolution
 from LMPCfunc import ComputeCost
-from LMPC import LMPC, BuildMatCostLMPC, FTOCP_LMPC, FTOCP_LMPC_Sol, BuildMatEqConst_LMPC
+from LMPC import LMPC, BuildMatCostLMPC, FTOCP_LMPC, FTOCP_LMPC_Sol, BuildMatEqConst_LMPC, FTOCP_LMPC_CVX, FTOCP_LMPC_CVX_Cost
 from pathos.multiprocessing import ProcessingPool as Pool
 from functools import partial
 import datetime
+from cvxopt.solvers import qp
 
 import numpy as np
 import time
 from scipy import linalg
 from scipy import optimize
 import matplotlib.pyplot as plt
+from cvxopt import spmatrix, matrix,solvers
 
+solvers.options['show_progress'] = False
 
 [A, B, Q, R, Q_LMPC, R_LMPC] = DefSystem(np)
 # print("Print A in region 0", A[np.ix_([0],[0,1],[0,1])])
 # print("Print A in region 0, but squeeze ", np.squeeze(A[np.ix_([0],[0,1],[0,1])]))
 
 # Initialization for the MPC computing the first feasible solution
-Time = 40                            # Number of simulation's time steps
+CVX = 1                              # if 1 ---> Use CVX
+Time = 30                            # Number of simulation's time steps
 N = 3                                # Controller's horizon
 n = 2                                # State Dimensions
 d = 1                                # Input Dimensions
@@ -31,24 +35,23 @@ x_opt      = np.zeros((n,Time+1))    # Initialize the optimal trajectory solved 
 u_opt      = np.zeros((d,Time))      # Initialize the optimal input solved over the infinite (very long) horizon
 
 # Build Matrices for equality constraint Gz = Ex(0), where z is the optimization variable which collects predicted state and input
-[G, E] = BuildMatEqConst(A ,B ,N ,n ,d ,np)
+[G, E, G_sparse, E_sparse] = BuildMatEqConst(A ,B ,N ,n ,d ,np, spmatrix)
 
 # Build Matrices for inequality constraint Gz = Ex(0), where z is the optimization variavle which collects predicted state and input
-[F, b] = BuildMatIneqConst(N, n, np, linalg)
+[F, b, F_sparse] = BuildMatIneqConst(N, n, np, linalg, spmatrix)
+
+
 
 # Build The matrices for the cost z^T M z,  where z is the optimization variable which collects predicted state and input
 P = np.array([[2.817354021023968,   2.060064829377980],
               [2.060064829377980,   3.743867101240135]]) # This is the terminal cost, it is the Lyapunov function from Matlab
-M = BuildMatCost(Q, R, P, N, linalg)
+[M, M_sparse] = BuildMatCost(Q, R, P, N, linalg, np, spmatrix)
 
-# Printing statement for sanity check
-print("Chekc one or several components of G")
-print(G[np.ix_(np.array([1,2]),np.array([1]))])
 
 # ============================================================================================
 # ============ Perform simulation for computing first feasible solution ======================
 # ============================================================================================
-
+#
 # Set initial conditions
 # x_feasible[:,0] = np.array([-3.95,-0.05]) # Set initial Conditions
 x_feasible[:,0] = np.array([1,1])          # Set initial Conditions
@@ -56,25 +59,32 @@ x_opt[:,0] = np.array([1,1])               # Set initial Conditions
 InitialGuess = np.zeros(((N+1)*n+N*d))     # Initial guess for the QP solver
 
 # Compute closed loop trajectory
-[x_feasible, u_feasible] = ComputeFeasibleSolution(Time, A, B, M, G, F, E, b, x_feasible, u_feasible, n, d, N, optimize, np, InitialGuess, linalg, FTOCP, GetPred, time)
+startTimer = datetime.datetime.now()
+[x_feasible, u_feasible] = ComputeFeasibleSolution(Time, A, B, M, M_sparse, G, G_sparse, F, F_sparse, E, E_sparse,
+                                                   b, x_feasible, u_feasible, n, d, N, optimize, np,
+                                                   InitialGuess, linalg, FTOCP, FTOCP_CVX, GetPred, time, CVX,
+                                                   qp, spmatrix, matrix)
+endTimer = datetime.datetime.now()
+deltaTimer = endTimer - startTimer
+print(deltaTimer.total_seconds())
 
-# print(x_feasible)
 # plt.plot(x_feasible[0,:], x_feasible[1,:], 'ro')
 # plt.axis([-4, 4, -4, 4])
 # plt.show()
-
+#
 # ==========================================================================================================
 # ============ Now that we have the first feasible solution we are ready for the LMPC ======================
 # ==========================================================================================================
 print("========= STARTING LMPC CODE =========")
 
 # Setting the LMPC parameters
-Parallel  = 1            # Set to 1 for multicore
+CVX_LMPC  = 0            # if 1 ---> Use CVX
+Parallel  = 0            # Set to 1 for multicore
 p = Pool(4)              # Initialize the pool for multicore
 Iteration = 10           # Max number of LMPC iterations (Need to define a priori the iterations as need to allocate memory)
-TimeLMPC  = Time + 50    # Max number of time steps at each LMPC iteration (If this number is exceed ---> ERROR)
-PointSS   = 10           # Number of point per iteration to use into SS
-SSit      = 4            # Number of Iterations to use into SS
+TimeLMPC  = Time + 30    # Max number of time steps at each LMPC iteration (If this number is exceed ---> ERROR)
+PointSS   = 30           # Number of point per iteration to use into SS
+SSit      = 2            # Number of Iterations to use into SS
 toll      = 10**(-6)     # LMPC reaches convergence whenever J^{j} - J^{j+1} <= toll (i.e. the cost is not decreasing along the iterations)
 SSindex   = N            # This is the time index of the first point used in SS at time t = 0. (i.e. if SSindex = N --> use x_{N} as first terminal constraint)
                          # IMPORTANT: Remember thing are indexed starting from 0 ---> have same index as state trajectory (i.e. for i = 0 pick x_0 etc ...)
@@ -102,10 +112,10 @@ for i in range(0, SSit):
     print("Feasible Iteration: %d, Time Steps %.1f, Iteration Cost: %.5f" % (i, Steps[i], Qfun[0, i]))
 
 # Build the cost matricx: Given the optimization variable z, the QP will solve to minimize z^T M z,  where z is the optimization variable which collects predicted state and input
-M_LMPC =  BuildMatCostLMPC(Q_LMPC, R_LMPC, N, np, linalg) # Note that this will be constant throughout the regions
+[M_LMPC, M_LMPC_sparse] =  BuildMatCostLMPC(Q_LMPC, R_LMPC, N, linalg, np, spmatrix) # Note that this will be constant throughout the regions
 
 # Build the matrices for the inqeuality constraint. Need to update as the terminal point belongs to SS
-[G_LMPC, E_LMPC, TermPoint] = BuildMatEqConst_LMPC(G, E, N ,n ,d ,np)
+[G_LMPC, E_LMPC, TermPoint, G_LMPC_sparse, E_LMPC_sparse] = BuildMatEqConst_LMPC(G, E, N ,n ,d ,np, spmatrix)
 
 # Now start the LMPC loop for the iterations. We start from SSit, which is the number of iterations that we used from SS. Note that above we initialized the first SSit iterations
 # with the first feasible trajectory. Finally, the loop terminate at Iteraions, which is the max number of iterations allowed
@@ -113,10 +123,13 @@ for it in range(SSit, Iteration):
     x[:, 0, it] = x[:, 0, 0] # Set the initial conditions for the it-th iteration
 
     startTimer = datetime.datetime.now()
-    [x[:,:, it], u[:,:, it], Steps[it] ] = LMPC(A, B, x, u, it, SSit, np, M_LMPC, G_LMPC, E_LMPC,  # Solve the LMPC problem at the i-th iteration
-                                                TermPoint, F, b, PointSS, SSindex, FTOCP_LMPC,
-                                                FTOCP_LMPC_Sol, n, d, N, SS, Qfun, linalg,
-                                                optimize, InitialGuess, GetPred, time, Parallel, p, partial)
+    [x[:,:, it], u[:,:, it], Steps[it] ] = LMPC(A, B, x, u, it, SSit, np, M_LMPC, G_LMPC, E_LMPC, TermPoint,  # Solve the LMPC problem at the i-th iteration
+                                                M_LMPC_sparse, G_LMPC_sparse, E_LMPC_sparse,
+                                                F, F_sparse, b, PointSS, SSindex, FTOCP_LMPC,
+                                                FTOCP_LMPC_Sol, FTOCP_LMPC_CVX, FTOCP_LMPC_CVX_Cost,
+                                                n, d, N, SS, Qfun, linalg,
+                                                optimize, InitialGuess, GetPred, time, Parallel, p, partial,
+                                                CVX_LMPC, spmatrix, qp, matrix)
 
     # Update SS and Qfun after the it-th iteration has been completed
     SS[:, 0:(Steps[it] + 1), it] = x[:, 0:(Steps[it] + 1), it]                                      # Update SS with the it-th closed loop trajectory
@@ -142,11 +155,13 @@ for it in range(SSit, Iteration):
 # ============ Compute the optimal solution over the infinite (very long) horizon ======================
 # ======================================================================================================
 
+
 # Now Compute Optimal Trajectory For Comparison
 N_opt = 20                                                              # Pick the long horizon to mimic the inifinite horizon
-M_opt = BuildMatCost(Q_LMPC, R_LMPC, Q_LMPC, N_opt, linalg)             # Build the matrix for cost
-[G_opt, E_opt]  = BuildMatEqConst(A ,B ,N_opt ,n ,d ,np)                # Build the matrices for equality constraint
-[F_opt, b_opt]  = BuildMatIneqConst(N_opt, n, np, linalg)               # Build the matrices for inequality constraint
+[M_opt, M_opt_sparse] = BuildMatCost(Q_LMPC, R_LMPC, Q_LMPC, N_opt, linalg, np, spmatrix)             # Build the matrix for cost
+[G_opt, E_opt, G_sparse, E_sparse ]  = BuildMatEqConst(A ,B ,N_opt ,n ,d ,np, spmatrix)                # Build the matrices for equality constraint
+[F_opt, b_opt, F_sparse]  = BuildMatIneqConst(N_opt, n, np, linalg, spmatrix)               # Build the matrices for inequality constraint
+
 InitialGuess    = np.zeros((N_opt+1)*n+N_opt*d)                         # Pick the initial guess
 [res, feasible] = FTOCP(M_opt, G_opt, E_opt, F_opt, b_opt, x_opt[:, 0], # Solve the FTOCP for the long horizon
                         optimize, np, InitialGuess, linalg)
