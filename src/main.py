@@ -78,8 +78,8 @@ print(deltaTimer.total_seconds())
 print("========= STARTING LMPC CODE =========")
 
 # Setting the LMPC parameters
-CVX_LMPC  = 0            # if 1 ---> Use CVX
-Parallel  = 0            # Set to 1 for multicore
+CVX_LMPC  = 1            # Set to 1 for CVX
+Parallel  = 1            # Set to 1 for multicore
 p = Pool(4)              # Initialize the pool for multicore
 Iteration = 10           # Max number of LMPC iterations (Need to define a priori the iterations as need to allocate memory)
 TimeLMPC  = Time + 30    # Max number of time steps at each LMPC iteration (If this number is exceed ---> ERROR)

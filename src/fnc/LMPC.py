@@ -22,23 +22,21 @@ def LMPC(A, B, x, u, it, SSit, np, M, G_LMPC, E_LMPC, TermPoint, M_sparse, G_LMP
     while (ReachedTerminalPoint == 0):
         # Loop over the latest SSit trajectories to create a vector of terminal constraints
         for j in range(0, SSit):
+            # Note that the time index SSindex indicates the first point that has to be considered from the (it-1-j)-th trajectory in SS
             SS_sel[:,j*PointSS + np.arange(0, PointSS)] = SS[:, SSindex + np.arange(0, PointSS), it - 1 - j]       # Store the terminal point from the (it - 1 - j)-th iteration in the vector SS_sel
             Qfun_sel[j * PointSS + np.arange(0, PointSS)] = Qfun[SSindex + np.arange(0, PointSS), it - 1 - j]      # Store cost associated with the terminal point from the (it - 1 - j)-th iteration in the vector Qfun_sel
 
         if Parallel == 0:
             for i in range(0, PointSS*SSit):          # Loop over the latest PointSS*SSit points
-                    # Note that the time index SSindex indicates the first point that has to be considered from the (it-1-j)-th trajectory in SS
                     if CVX == 0:
-                        CostQP[i] = FTOCP_LMPC(FTOCP_LMPC_Sol, M, G_LMPC, E_LMPC, n, SSindex, it, SS_sel, TermPoint,        # Solve the Finite Time Optimal Control Problem (FTOCP)
+                        CostQP[i] = FTOCP_LMPC(FTOCP_LMPC_Sol, M, G_LMPC, E_LMPC, n, it, SS_sel, TermPoint,        # Solve the Finite Time Optimal Control Problem (FTOCP)
                                       F, b, x[:, t, it], optimize, np, InitialGuess, Qfun_sel, i)
                     else:
                         _, _, CostQP[i] = FTOCP_LMPC_CVX(M_sparse, G_LMPC_sparse, E_LMPC_sparse, n, SS_sel, F_sparse, b,
                                                    x[:, t, it], np, Qfun_sel, qp, matrix, spmatrix, i)
-
-
         else:
             if CVX == 0:
-                Fun = partial(FTOCP_LMPC, FTOCP_LMPC_Sol, M, G_LMPC, E_LMPC, n, SSindex, it, SS_sel, TermPoint,         # Create the function to iterate
+                Fun = partial(FTOCP_LMPC, FTOCP_LMPC_Sol, M, G_LMPC, E_LMPC, n, it, SS_sel, TermPoint,         # Create the function to iterate
                               F, b, x[:, t, it], optimize, np, InitialGuess, Qfun_sel)
                 index = np.arange(0, PointSS*SSit)                                                                 # Create the index vector
                 Res = p.map(Fun, index)                                                                            # Run the process in parallel
@@ -126,7 +124,7 @@ def BuildMatCostLMPC(Q, R, N, linalg, np, spmatrix):
     return M, M_sparse
 
 
-def FTOCP_LMPC(FTOCP_LMPC_Sol, M, G, E, n, SSindex, it, SS_sel, TermPoint, F, b, x0, optimize, np, z0, Qfun_sel, i):
+def FTOCP_LMPC(FTOCP_LMPC_Sol, M, G, E, n, it, SS_sel, TermPoint, F, b, x0, optimize, np, z0, Qfun_sel, i):
     [Sol, feasible, QPcost] = FTOCP_LMPC_Sol(M, G, E, n, SS_sel, TermPoint, F, b, x0, optimize, np, z0, Qfun_sel, i)
 
     return QPcost
@@ -176,7 +174,7 @@ def FTOCP_LMPC_CVX(M, G, E, n, SS_sel, F, b, x0, np, Qfun_sel, qp, matrix, spmat
     ind = range(E.size[0] - n, E.size[0])
     TermPoint_sparse = spmatrix(SS_sel[:, i], ind, [0, 0])
 
-    q = matrix(0.0, (M.size[0], 1))
+    q = matrix(0.0, (M.size[0], 1))  # Vector associated with the linear cost, in this case zeros. NOTE: it must be dense
 
     res_cons = qp(M, q,  F, matrix(b), G, E* matrix(x0)+TermPoint_sparse)
 
