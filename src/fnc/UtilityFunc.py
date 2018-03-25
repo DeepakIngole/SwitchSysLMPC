@@ -2,12 +2,12 @@ def DefSystem(np):
 
     # A \in \mathbb{R}^{n \dot n \dot r} where n in the dimension of the state and r is the number of regions
     # basically A[:,:,1] is the system dynamics in region 1
-    A = [np.array([[1., 1.],
-                   [0., 1.]]),
+    A = [np.array([[0.8, 0.5],
+                   [0., 0.8]]),
          np.array([[0.9, 0.8],
                    [0. , 0.9]]),
-         np.array([[0.9, 1.0],
-                   [0., 0.9]])]
+         np.array([[0.6, 0.4],
+                   [0., 0.7]])]
 
     # B \in \mathbb{R}^{n \dot d \dot r} where n and d are the dimensions of the state and inputs and r is the number of regions
     # basically B[:,:,1] is the B matrix in region 1
@@ -26,17 +26,17 @@ def DefSystem(np):
 
     R_LMPC = np.array(1)
 
-    Vertex = [np.array([[ 2,  1],
-                        [-2,  1],
-                        [ 2, -1],
-                        [-2, -1]]),
-              np.array([[ 2,  2],
-                        [ 2,  1],
-                        [-2,  1],
-                        [-2,  2]]),
+    Vertex = [np.array([[    2,  1],
+                        [-0.25,  1],
+                        [-0.25, -1],
+                        [    2, -1]]),
+              np.array([[-0.25,  1],
+                        [-0.25, -1],
+                        [-2, -1],
+                        [-2,  1]]),
               np.array([[2, 3],
-                        [2, 2],
-                        [-2, 2],
+                        [2, 1],
+                        [-2, 1],
                         [-2, 3],
                         [-2, 4]])]
 
@@ -59,7 +59,7 @@ def DefineRegions(Vertex, Vrep, Hrep, np):
 
 def SysEvolution(x, u, F_region, b_region, np, CurrentRegion, A, B):
     CurrReg = CurrentRegion(x, F_region, b_region, np)
-    print(x, CurrReg, A[CurrReg], B[CurrReg])
+    print(x, CurrReg)
     x_next = np.dot(A[CurrReg],x) + np.dot(B[CurrReg],u)
     return x_next
 
@@ -72,7 +72,7 @@ def CurrentRegion(x, F_region, b_region, np):
             Region = i
             break
     if Region == np.inf:
-        print "ERROR: Outside Feasible Region"
+        print "ERROR: ",x," Outside Feasible Region"
 
     return Region
 
@@ -85,7 +85,7 @@ def PlotRegions(Vertex, plt, np, Vrep, Hrep, x):
     plt.plot(x[0,:], x[1,:], '-ro')
 
     plt.xlim([-2.5, 2.5])
-    plt.ylim([-1, 3.5])
+    plt.ylim([-1, 4.5])
 
     plt.show()
 

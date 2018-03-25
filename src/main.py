@@ -19,7 +19,7 @@ from cvxopt import spmatrix, matrix,solvers
 from polyhedron import Vrep, Hrep
 
 # Initialization for the MPC computing the first feasible solution
-Time = 30                            # Number of simulation's time steps
+Time = 40                            # Number of simulation's time steps
 N = 3                                # Controller's horizon
 n = 2                                # State Dimensions
 d = 1                                # Input Dimensions
@@ -32,12 +32,14 @@ solvers.options['show_progress'] = False      # Turn off CVX messages
 
 F_region, b_region = DefineRegions(Vertex, Vrep, Hrep, np)
 
-x_feasible[:,0] = np.array([-1,2.5])          # Set initial Conditions
+x_feasible[:,0] = np.array([-2,0.5])          # Set initial Conditions
 K = np.array([0.4221,  1.2439])
 
 for i in range(0, Time):
     u_feasible[:,i] = -np.dot(K, x_feasible[:,i])
     x_feasible[:,i+1] = SysEvolution(x_feasible[:,i], u_feasible[:,i], F_region, b_region, np, CurrentRegion, A, B)
+
+print(x_feasible)
 
 PlotRegions(Vertex, plt, np, Vrep, Hrep, x_feasible)
 #
