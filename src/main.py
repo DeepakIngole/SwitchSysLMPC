@@ -32,7 +32,7 @@ solvers.options['show_progress'] = False      # Turn off CVX messages
 
 F_region, b_region = DefineRegions(Vertex, Vrep, Hrep, np)
 
-x_feasible[:,0] = np.array([-1,2.5])          # Set initial Conditions
+x_feasible[:,0] = np.array([1,0.9])          # Set initial Conditions
 K = np.array([0.4221,  1.2439])
 
 for i in range(0, Time):
@@ -166,7 +166,7 @@ for i in range(0, int(Steps[0])+1):
 print "Steps in Region 0, Firs Feasible Solution: ",list_start.count(0), " Steady State: ", list_it.count(0)
 print "Steps in Region 1, Firs Feasible Solution: ",list_start.count(1), " Steady State: ", list_it.count(1)
 print "Steps in Region 1, Firs Feasible Solution: ",list_start.count(2), " Steady State: ", list_it.count(2)
-
+print "Evolution First Feasible trajecotry and Steady state \n", list_start, "\n", list_it
 # print x[:,:,it]
 
 PlotRegionsResult(Vertex, plt, np, Vrep, Hrep, x_feasible, x[:,0:(Steps[it] + 1),it])
