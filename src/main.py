@@ -54,7 +54,7 @@ P = np.array([[2.817354021023968,   2.060064829377980],
 #
 # Set initial conditions
 # x_feasible[:,0] = np.array([-3.95,-0.05]) # Set initial Conditions
-x_feasible[:,0] = np.array([1,1])          # Set initial Conditions
+x_feasible[:,0] = np.array([1,0.9])         # Set initial Conditions
 x_opt[:,0] = np.array([1,1])               # Set initial Conditions
 InitialGuess = np.zeros(((N+1)*n+N*d))     # Initial guess for the QP solver
 
@@ -78,7 +78,7 @@ print(deltaTimer.total_seconds())
 print("========= STARTING LMPC CODE =========")
 
 # Setting the LMPC parameters
-CVX_LMPC  = 1            # Set to 1 for CVX
+CVX_LMPC  = 0            # Set to 1 for CVX
 Parallel  = 1            # Set to 1 for multicore
 p = Pool(4)              # Initialize the pool for multicore
 Iteration = 10           # Max number of LMPC iterations (Need to define a priori the iterations as need to allocate memory)

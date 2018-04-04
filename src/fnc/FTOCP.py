@@ -91,14 +91,14 @@ def BuildMatIneqConst(N, n, np, linalg, spmatrix):
                     [ 0., 1.],
                     [ 0.,-1.]]])
 
-    bx = np.array([[[ 4.],
-                    [ 4.],
-                    [ 4.],
-                    [ 4.]],
-                   [[ 4.],
-                    [ 4.],
-                    [ 4.],
-                    [ 4.]]])
+    bx = np.array([[[ 2.],
+                    [ 2.],
+                    [ 1.],
+                    [ 1.]],
+                   [[ 2.],
+                    [ 2.],
+                    [ 2.],
+                    [ 2.]]])
 
     # Buil the matrices for the input constraint in each region. In the region i we want Fx[i]x <= bx[b]
     Fu = np.array([[[ 1.],
@@ -106,10 +106,10 @@ def BuildMatIneqConst(N, n, np, linalg, spmatrix):
                    [[ 1.],
                     [-1.]]])
 
-    bu = np.array([[[ 1.],
-                    [ 1.]],
-                   [[ 1.],
-                    [ 1.]]])
+    bu = np.array([[[ 3.],
+                    [ 3.]],
+                   [[ 3.],
+                    [ 3.]]])
 
     # Now stuck the constraint matrices to express them in the form Fz<=b. Note that z collects states and inputs
     # Let's start by computing the submatrix of F relates with the state
