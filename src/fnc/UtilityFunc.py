@@ -2,9 +2,9 @@ def DefSystem(np):
 
     # A \in \mathbb{R}^{n \dot n \dot r} where n in the dimension of the state and r is the number of regions
     # basically A[:,:,1] is the system dynamics in region 1
-    A = [np.array([[0.8, 0.5],
-                   [0., 0.8]]),
-         np.array([[0.9, 0.8],
+    A = [np.array([[1.0, 1.0],
+                   [0., 1.0]]),
+         np.array([[0.9, 0.7],
                    [0. , 0.9]]),
          np.array([[0.6, 0.4],
                    [0., 0.7]])]
@@ -22,16 +22,16 @@ def DefSystem(np):
 
     R = np.array(10)
 
-    Q_LMPC = np.eye(2)
+    Q_LMPC = 0.0000000001*np.eye(2)
 
-    R_LMPC = np.array(1)
+    R_LMPC = 100000*np.array(1)
 
     Vertex = [np.array([[    2,  1],
-                        [-0.25,  1],
-                        [-0.25, -1],
+                        [-0.075,  1],
+                        [-0.075, -1],
                         [    2, -1]]),
-              np.array([[-0.25,  1],
-                        [-0.25, -1],
+              np.array([[-0.075,  1],
+                        [-0.075, -1],
                         [-2, -1],
                         [-2,  1]]),
               np.array([[2, 3],
@@ -59,7 +59,6 @@ def DefineRegions(Vertex, Vrep, Hrep, np):
 
 def SysEvolution(x, u, F_region, b_region, np, CurrentRegion, A, B):
     CurrReg = CurrentRegion(x, F_region, b_region, np)
-    print(x, CurrReg)
     x_next = np.dot(A[CurrReg],x) + np.dot(B[CurrReg],u)
     return x_next
 
@@ -67,8 +66,9 @@ def CurrentRegion(x, F_region, b_region, np):
     NumRegions = len(F_region) # Number of Regions
 
     Region = np.inf
+    toll = 1e-15
     for i in range(0, NumRegions):
-        if np.alltrue(np.dot(F_region[i], x) <= b_region[i]):
+        if np.alltrue(np.dot(F_region[i], x) <= b_region[i] + toll*np.ones(b_region[i].shape)):
             Region = i
             break
     if Region == np.inf:
@@ -77,7 +77,6 @@ def CurrentRegion(x, F_region, b_region, np):
     return Region
 
 def PlotRegions(Vertex, plt, np, Vrep, Hrep, x):
-    print "Vertex len", len(Vertex)
 
     plt.plot(np.squeeze(Vertex[0])[:,0], np.squeeze(Vertex[0])[:,1], "r*", marker="*", markersize=15)
     plt.plot(np.squeeze(Vertex[1])[:,0], np.squeeze(Vertex[1])[:,1], 'bo', marker="o", markersize=10)
@@ -89,33 +88,20 @@ def PlotRegions(Vertex, plt, np, Vrep, Hrep, x):
 
     plt.show()
 
-    # points = np.array([[1, 1],
-    #                    [1, -1],
-    #                    [-1, 1],
-    #                    [-1, -1]])
-    #
-    # print "Points: \n", np.squeeze(Vertex[2])[:, 1]
-    #
-    # def mkhull(points):
-    #     p = Vrep(points)
-    #     return Hrep(p.A, p.b)
-    #
-    # p = mkhull(points)
-    #
-    # print 'Hull vertices:\n', p.generators
-    #
-    # points2 = np.array([[1, 1],
-    #                     [0.5, -0.5],
-    #                     [-2, 1],
-    #                     [-1, -0.3]])
-    #
-    # print "Points: \n", points2
-    # print "Shape: \n", points2.shape
-    #
-    # for i in range(len(points2)):
-    #     point = points2[i, :]
-    #     if np.alltrue(np.dot(p.A, point) <= p.b):
-    #         print 'point', point, 'is IN'
-    #     else:
-    #         print 'point', point, 'is OUT'
+
+    return 1
+
+
+def PlotRegionsResult(Vertex, plt, np, Vrep, Hrep, x, x_SteadyState):
+    plt.plot(np.squeeze(Vertex[0])[:, 0], np.squeeze(Vertex[0])[:, 1], "r*", marker="*", markersize=15)
+    plt.plot(np.squeeze(Vertex[1])[:, 0], np.squeeze(Vertex[1])[:, 1], 'bo', marker="o", markersize=10)
+    plt.plot(np.squeeze(Vertex[2])[:, 0], np.squeeze(Vertex[2])[:, 1], 'rs', marker="s", markersize=5)
+    plt.plot(x[0, :], x[1, :], '-ro')
+    plt.plot(x_SteadyState[0, :], x_SteadyState[1, :], '-bo')
+
+    plt.xlim([-2.5, 2.5])
+    plt.ylim([-1, 4.5])
+
+    plt.show()
+
     return 1

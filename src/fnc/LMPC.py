@@ -1,4 +1,6 @@
-def LMPC(A, B, x, u, it, SSit, np, M, G_LMPC, E_LMPC, TermPoint, M_sparse, G_LMPC_sparse, E_LMPC_sparse, F, F_sparse, b, PointSS, SSindex, FTOCP_LMPC, FTOCP_LMPC_Sol, FTOCP_LMPC_CVX, FTOCP_LMPC_CVX_Cost, n, d, N, SS, Qfun, linalg, optimize, InitialGuess, GetPred, time, Parallel, p, partial, CVX, spmatrix, qp, matrix):
+def LMPC(A, B, x, u, it, SSit, np, M, M_sparse, PointSS, SSindex, FTOCP_LMPC, FTOCP_LMPC_Sol, FTOCP_LMPC_CVX, FTOCP_LMPC_CVX_Cost,
+         n, d, N, SS_list, Qfun_list, linalg, optimize, InitialGuess, GetPred, time, Parallel, p, partial, CVX, spmatrix, qp, matrix,
+         SelectReg, BuildMatEqConst, BuildMatEqConst_LMPC, BuildMatIneqConst, F_region, b_region, CurrentRegion, SysEvolution):
     # =============================================================================
     # ========== This functions run the it-th LMPC closed loop iteration ==========
     # =============================================================================
@@ -19,12 +21,18 @@ def LMPC(A, B, x, u, it, SSit, np, M, G_LMPC, E_LMPC, TermPoint, M_sparse, G_LMP
 
     # Now initialize the main loop for computing the closed loop trajectory
     t = 0  # Set time = 0
+
     while (ReachedTerminalPoint == 0):
+        #
+        [G, E, _, _] = BuildMatEqConst(A, B, N, n, d, np, spmatrix, SelectReg)  # Write the dynamics as equality constraint
+        [G_LMPC, E_LMPC, TermPoint, G_LMPC_sparse, E_LMPC_sparse] = BuildMatEqConst_LMPC(G, E, N, n, d, np, spmatrix)  # Add the terminal constraint
+        [F, b, F_sparse] = BuildMatIneqConst(N, n, np, linalg, spmatrix, F_region, b_region, SelectReg)
+
         # Loop over the latest SSit trajectories to create a vector of terminal constraints
         for j in range(0, SSit):
             # Note that the time index SSindex indicates the first point that has to be considered from the (it-1-j)-th trajectory in SS
-            SS_sel[:,j*PointSS + np.arange(0, PointSS)] = SS[:, SSindex + np.arange(0, PointSS), it - 1 - j]       # Store the terminal point from the (it - 1 - j)-th iteration in the vector SS_sel
-            Qfun_sel[j * PointSS + np.arange(0, PointSS)] = Qfun[SSindex + np.arange(0, PointSS), it - 1 - j]      # Store cost associated with the terminal point from the (it - 1 - j)-th iteration in the vector Qfun_sel
+            SS_sel[:,j*PointSS + np.arange(0, PointSS)] = SS_list[SelectReg[-1]][0:n, SSindex + np.arange(0, PointSS), it - 1 - j]       # Store the terminal point from the (it - 1 - j)-th iteration in the vector SS_sel
+            Qfun_sel[j * PointSS + np.arange(0, PointSS)] = Qfun_list[SelectReg[-1]][SSindex + np.arange(0, PointSS), it - 1 - j]      # Store cost associated with the terminal point from the (it - 1 - j)-th iteration in the vector Qfun_sel
 
         if Parallel == 0:
             for i in range(0, PointSS*SSit):          # Loop over the latest PointSS*SSit points
@@ -53,7 +61,7 @@ def LMPC(A, B, x, u, it, SSit, np, M, G_LMPC, E_LMPC, TermPoint, M_sparse, G_LMP
         j_star = index[0]
         i_star = index[1]
 
-        SS_term[:,0] = SS[:, SSindex+i_star,it-1-j_star]                        # Pick the terminal point associated with the best cost
+        SS_term[:,0] = SS_list[SelectReg[-1]][0:n, SSindex+i_star,it-1-j_star]                        # Pick the terminal point associated with the best cost
 
         # Solve the Finite Time Optimal Control Problem (FTOCP): This time get the optimal input and also the predicted trajectory
         if CVX ==0:
@@ -73,24 +81,31 @@ def LMPC(A, B, x, u, it, SSit, np, M, G_LMPC, E_LMPC, TermPoint, M_sparse, G_LMP
         else:
             u[:, t, it] = 10000                                                # If not feasible set input to high number
             print("CostQP", CostQP)
-            print("ERROR: Optimization Problem Infeasible at time", t,         # Print an error message
-                  SS[:, SSindex+i_star,it-1-j_star], CostSingleQP)
+            print("ERROR: Optimization Problem Infeasible at time", t)
 
             ReachedTerminalPoint = 1                                           # Terminate the loop
             break
 
         # Apply the input to the system
-        x[:, t + 1, it] = np.dot(A[0], (x[:, t, it])) + np.dot(B[0], (u[:, t, it]))
+        x[:, t + 1, it] = SysEvolution(x[:, t, it], u[:, t, it], F_region, b_region, np, CurrentRegion, A, B)
         # print "Solver Time ", time.clock() - start_time, "seconds"
 
         # Now check if the terminal point used as terminal constraint in the best QP is the terminal point of our task (i.e. the point closed to the origin for the (it-1-j_star)-th trajectory)
         # This is checked propagating terminal point used as terminal constraint along the SS and checking if the value of the 0-th coordinate is equal to the initialization value
-        if SS[0, SSindex+i_star+1, it-1-j_star] == 10000:  # Here we check if the 0-th coordinate the propagated point equals the initilization value
-            ReachedTerminalPoint = 1                       # If so, set the flag to 1: the simulation is completed
+        IndexTermPoint = SS_list[SelectReg[-1]][n, SSindex+i_star,it-1-j_star]
+        SelectReg[0:SelectReg.size-1] = SelectReg[1:SelectReg.size]
 
-        SSindex = SSindex + i_star + 1   # Now update the time index used for picking the first point in the trajectories of SS.
-                                         # This step is crucial to guarantee recursive feasibility. It is needed the
-                                         # propagated point in SS will be used as terminal constraint, so that the shifted solution is feasible for the LMPC.
+        # print "Propagated Point: ", x[:, IndexTermPoint+1, it-1-j_star], " Terminal Point: ", SS_term[:,0]
+        # print "Traje: ", x[:, 0:IndexTermPoint + 3, it - 1 - j_star]
+
+        if x[1, IndexTermPoint+1, it-1-j_star] >= 10000:  # Here we check if the 0-th coordinate the propagated point equals the initilization value
+            # print "REACHED TERMIANL POINT"
+            ReachedTerminalPoint = 1                       # If so, set the flag to 1: the simulation is completed
+        else:
+            SelectReg[-1] = CurrentRegion(x[:, IndexTermPoint + 1, it - 1 - j_star], F_region, b_region, np)
+            SSindex = int(np.where(SS_list[SelectReg[-1]][n, :, it - 1 - j_star ] == IndexTermPoint+1)[0])  # Now update the time index used for picking the first point in the trajectories of SS.
+                                                                                                            # This step is crucial to guarantee recursive feasibility. It is needed the
+                                                                                                            # propagated point in SS will be used as terminal constraint, so that the shifted solution is feasible for the LMPC.
 
         # Update time index for the simulation
         t = t+1
@@ -100,8 +115,8 @@ def LMPC(A, B, x, u, it, SSit, np, M, G_LMPC, E_LMPC, TermPoint, M_sparse, G_LMP
     # Here we could have solved few QPs with different time horizons. This issue comes from the fact that we want to mimic an infinite horizon control problem.
     for i in range(1, N):
         u[:, t, it] = uPred[i]                              # Extract the input from the predicted ones
-        x[:, t + 1, it] = np.dot(A[0], (x[:, t, it])) + np.dot(B[0], (u[:, t, it]))     # Apply the input to the system
-        t = t + 1                                                                       # Update time index for the simulation
+        x[:, t + 1, it] = SysEvolution(x[:, t, it], u[:, t, it], F_region, b_region, np, CurrentRegion, A, B)     # Apply the input to the system
+        t = t + 1                                                                                                 # Update time index for the simulation
 
     return x[:,:,it], u[:,:,it], t
 

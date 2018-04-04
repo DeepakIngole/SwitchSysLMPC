@@ -45,7 +45,7 @@ def FTOCP(M, G, E, F, b, x0, optimize, np, z0, linalg):
 
     return res_cons.x, feasible
 
-def BuildMatEqConst(A ,B ,N ,n ,d ,np, spmatrix):
+def BuildMatEqConst(A ,B ,N ,n ,d ,np, spmatrix, SelectedRegions):
     # Buil matrices for optimization (Convention from Chapter 15.2 Borrelli, Bemporad and Morari MPC book)
     # We are going to build our optimization vector z \in \mathbb{R}^((N+1) \dot n \dot N \dot d), note that this vector
     # stucks the predicted trajectory x_{k|t} \forall k = t, \ldots, t+N+1 over the horizon and
@@ -56,10 +56,10 @@ def BuildMatEqConst(A ,B ,N ,n ,d ,np, spmatrix):
     for i in range(0, N):
         ind1 = n + i * n + np.arange(n)
         ind2x = i * n + np.arange(n)
-        Gx[np.ix_(ind1, ind2x)] = -A[0]
+        Gx[np.ix_(ind1, ind2x)] = -A[SelectedRegions[i]]
 
         ind2u = i * d + np.arange(d)
-        Gu[np.ix_(ind1, ind2u)] = -B[0]
+        Gu[np.ix_(ind1, ind2u)] = -B[SelectedRegions[i]]
 
     G = np.hstack((Gx, Gu))
     E = np.zeros((n * (N + 1), n))
@@ -80,25 +80,7 @@ def BuildMatEqConst(A ,B ,N ,n ,d ,np, spmatrix):
     E_sparse = spmatrix(E[np.nonzero(E)], np.nonzero(E)[0], np.nonzero(E)[1], E.shape)
     return G, E, G_sparse, E_sparse
 
-def BuildMatIneqConst(N, n, np, linalg, spmatrix):
-    # Buil the matrices for the state constraint in each region. In the region i we want Fx[i]x <= bx[b]
-    Fx = np.array([[[ 1., 0.],
-                    [-1., 0.],
-                    [ 0., 1.],
-                    [ 0.,-1.]],
-                   [[ 1., 0.],
-                    [-1., 0.],
-                    [ 0., 1.],
-                    [ 0.,-1.]]])
-
-    bx = np.array([[[ 4.],
-                    [ 4.],
-                    [ 4.],
-                    [ 4.]],
-                   [[ 4.],
-                    [ 4.],
-                    [ 4.],
-                    [ 4.]]])
+def BuildMatIneqConst(N, n, np, linalg, spmatrix, Fx, bx, SelectReg):
 
     # Buil the matrices for the input constraint in each region. In the region i we want Fx[i]x <= bx[b]
     Fu = np.array([[[ 1.],
@@ -113,11 +95,15 @@ def BuildMatIneqConst(N, n, np, linalg, spmatrix):
 
     # Now stuck the constraint matrices to express them in the form Fz<=b. Note that z collects states and inputs
     # Let's start by computing the submatrix of F relates with the state
-    rep_a = [Fx[0]] * (N)
-    Mat = linalg.block_diag(*rep_a)
-    NoTerminalConstr = np.zeros((np.shape(Mat)[0],n)) # No need to constraint also the terminal point
-    Fxtot = np.hstack((Mat, NoTerminalConstr))
-    bxtot = np.repeat(bx[0], N)
+    MatFx = np.empty((0, 0))
+    bxtot  = np.empty(0)
+
+    for i in range(0, N): # No need to constraint also the terminal point --> go up to N
+        MatFx = linalg.block_diag(MatFx, Fx[SelectReg[i]])
+        bxtot  = np.append(bxtot, bx[SelectReg[i]])
+
+    NoTerminalConstr = np.zeros((np.shape(MatFx)[0], n))  # No need to constraint also the terminal point
+    Fxtot = np.hstack((MatFx, NoTerminalConstr))
 
 
     # Let's start by computing the submatrix of F relates with the input
@@ -132,7 +118,6 @@ def BuildMatIneqConst(N, n, np, linalg, spmatrix):
     Dummy2 = np.hstack( (np.zeros((rFutot,cFxtot)), Futot))
     F = np.vstack( ( Dummy1, Dummy2) )
     b = np.hstack((bxtot, butot))
-
 
     F_sparse = spmatrix(F[np.nonzero(F)], np.nonzero(F)[0], np.nonzero(F)[1], F.shape)
 
