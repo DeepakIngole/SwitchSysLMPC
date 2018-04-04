@@ -24,7 +24,7 @@ def DefSystem(np):
 
     Q_LMPC = 1*np.eye(2)
 
-    R_LMPC = 0.001*np.array(1)
+    R_LMPC = 1*np.array(1)
 
     Vertex = [np.array([[    2,  1],
                         [-0.075,  1],
@@ -77,10 +77,12 @@ def CurrentRegion(x, F_region, b_region, np):
     return Region
 
 def PlotRegions(Vertex, plt, np, Vrep, Hrep, x):
-
-    plt.plot(np.squeeze(Vertex[0])[:,0], np.squeeze(Vertex[0])[:,1], "r*", marker="*", markersize=15)
-    plt.plot(np.squeeze(Vertex[1])[:,0], np.squeeze(Vertex[1])[:,1], 'bo', marker="o", markersize=10)
-    plt.plot(np.squeeze(Vertex[2])[:,0], np.squeeze(Vertex[2])[:,1], 'rs', marker="s", markersize=5)
+    plt.plot(np.hstack( ((Vertex[0])[:,0], np.squeeze(Vertex[0])[0,0]) ),
+             np.hstack( ((Vertex[0])[:,1], np.squeeze(Vertex[0])[0,1]) ), "-rs")
+    plt.plot(np.hstack( ((Vertex[1])[:,0], np.squeeze(Vertex[1])[0,0])),
+             np.hstack( ((Vertex[1])[:,1], np.squeeze(Vertex[1])[0,1])), "-ks")
+    plt.plot(np.hstack( ((Vertex[2])[:,0], np.squeeze(Vertex[2])[0,0])),
+             np.hstack( ((Vertex[2])[:,1], np.squeeze(Vertex[2])[0,1])), "-bs")
     plt.plot(x[0,:], x[1,:], '-ro')
 
     plt.xlim([-2.5, 2.5])
@@ -93,9 +95,13 @@ def PlotRegions(Vertex, plt, np, Vrep, Hrep, x):
 
 
 def PlotRegionsResult(Vertex, plt, np, Vrep, Hrep, x, x_SteadyState):
-    plt.plot(np.squeeze(Vertex[0])[:, 0], np.squeeze(Vertex[0])[:, 1], "r*", marker="*", markersize=15)
-    plt.plot(np.squeeze(Vertex[1])[:, 0], np.squeeze(Vertex[1])[:, 1], 'bo', marker="o", markersize=10)
-    plt.plot(np.squeeze(Vertex[2])[:, 0], np.squeeze(Vertex[2])[:, 1], 'rs', marker="s", markersize=5)
+    plt.plot(np.hstack(((Vertex[0])[:, 0], np.squeeze(Vertex[0])[0, 0])),
+             np.hstack(((Vertex[0])[:, 1], np.squeeze(Vertex[0])[0, 1])), "-rs")
+    plt.plot(np.hstack(((Vertex[1])[:, 0], np.squeeze(Vertex[1])[0, 0])),
+             np.hstack(((Vertex[1])[:, 1], np.squeeze(Vertex[1])[0, 1])), "-ks")
+    plt.plot(np.hstack(((Vertex[2])[:, 0], np.squeeze(Vertex[2])[0, 0])),
+             np.hstack(((Vertex[2])[:, 1], np.squeeze(Vertex[2])[0, 1])), "-bs")
+
     plt.plot(x[0, :], x[1, :], '-ro')
     plt.plot(x_SteadyState[0, :], x_SteadyState[1, :], '-bo')
 

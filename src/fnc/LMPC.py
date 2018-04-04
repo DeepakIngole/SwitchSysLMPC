@@ -1,9 +1,9 @@
 def LMPC(A, B, x, u, it, SSit, np, M, M_sparse, PointSS, SSindex, FTOCP_LMPC, FTOCP_LMPC_Sol, FTOCP_LMPC_CVX, FTOCP_LMPC_CVX_Cost,
          n, d, N, SS_list, Qfun_list, linalg, optimize, InitialGuess, GetPred, time, Parallel, p, partial, CVX, spmatrix, qp, matrix,
          SelectReg, BuildMatEqConst, BuildMatEqConst_LMPC, BuildMatIneqConst, F_region, b_region, CurrentRegion, SysEvolution):
-    # =============================================================================
-    # ========== This functions run the it-th LMPC closed loop iteration ==========
-    # =============================================================================
+    # ==================================================================================================================
+    # ========================== This functions run the it-th LMPC closed loop iteration ===============================
+    # ==================================================================================================================
 
     # The iteration runs until the predicted trajectory reached the terminal point (i.e. in this example point closer to the origin)
     ReachedTerminalPoint = 0         # Flag to check if the iteration is completed
@@ -19,14 +19,11 @@ def LMPC(A, B, x, u, it, SSit, np, M, M_sparse, PointSS, SSindex, FTOCP_LMPC, FT
     CostQP   = 10000*np.ones(PointSS*SSit)            # This vector will contain the cost of each QP that we will solve
     SS_term  = 10000*np.ones((n,1))                   # This vector will contain the terminal point associated with the best cost from CostQP
 
-    CostQP1   = 10000*np.ones(PointSS*SSit)            # This vector will contain the cost of each QP that we will solve
-    CostSingleQP1 = np.zeros((SSit, PointSS))        # This vector stores the cost of each of the (PointSS * SSit) QPs
-
     # Now initialize the main loop for computing the closed loop trajectory
     t = 0  # Set time = 0
-
     while (ReachedTerminalPoint == 0):
-        #
+        # At each time step is needed to compute the matrices for equality and inequality constraint. These matrices
+        # are computed using the regions to which the candidate solution belongs to (Vector SelectReg)
         [G_FTOCP, E_FTOCP, _, _] = BuildMatEqConst(A, B, N, n, d, np, spmatrix, SelectReg)  # Write the dynamics as equality constraint
         [G_LMPC, E_LMPC, TermPoint, G_LMPC_sparse, E_LMPC_sparse] = BuildMatEqConst_LMPC(G_FTOCP, E_FTOCP, N, n, d, np, spmatrix)  # Add the terminal constraint
         [F, b, F_sparse] = BuildMatIneqConst(N, n, np, linalg, spmatrix, F_region, b_region, SelectReg)
@@ -40,45 +37,27 @@ def LMPC(A, B, x, u, it, SSit, np, M, M_sparse, PointSS, SSindex, FTOCP_LMPC, FT
         if Parallel == 0:
             for i in range(0, PointSS*SSit):          # Loop over the latest PointSS*SSit points
                     if CVX == 0:
-                        CostQP[i] = FTOCP_LMPC(FTOCP_LMPC_Sol, M, G_LMPC, E_LMPC, n, it, SS_sel, TermPoint,        # Solve the Finite Time Optimal Control Problem (FTOCP)
+                        CostQP[i] = FTOCP_LMPC(FTOCP_LMPC_Sol, M, G_LMPC, E_LMPC, n, it, SS_sel, TermPoint,   # Solve the Finite Time Optimal Control Problem (FTOCP)
                                       F, b, x[:, t, it], optimize, np, InitialGuess, Qfun_sel, i)
-
-                        _, _, CostQP1[i] = FTOCP_LMPC_CVX(M_sparse, G_LMPC_sparse, E_LMPC_sparse, n, SS_sel, F_sparse, b,
-                                                         x[:, t, it], np, Qfun_sel, qp, matrix, spmatrix, i)
-
-                        if (CostQP[i]- CostQP1[i]) > 1:
-                            print "SS_sel", SS_sel
-                            [Sol, Feasible, _] = FTOCP_LMPC_Sol(M, G_LMPC, E_LMPC, n, SS_sel, TermPoint,
-                                                                F, b, x[:, t, it], optimize, np, InitialGuess, Qfun_sel, i)
-
-                            [Sol1, Feasible1, _] = FTOCP_LMPC_CVX(M_sparse, G_LMPC_sparse, E_LMPC_sparse, n, SS_sel,
-                                                                  F_sparse, b, x[:, t, it], np, Qfun_sel, qp, matrix, spmatrix, i)
-
-                            print "Here Sol: ", Sol, Feasible
-                            print "Here Sol1: ", Sol1, Feasible1
-                            ReachedTerminalPoint = 1  # Terminate the loop
-                            break
-
                     else:
                         _, _, CostQP[i] = FTOCP_LMPC_CVX(M_sparse, G_LMPC_sparse, E_LMPC_sparse, n, SS_sel, F_sparse, b,
                                                    x[:, t, it], np, Qfun_sel, qp, matrix, spmatrix, i)
 
         else:
             if CVX == 0:
-                Fun = partial(FTOCP_LMPC, FTOCP_LMPC_Sol, M, G_LMPC, E_LMPC, n, it, SS_sel, TermPoint,         # Create the function to iterate
+                Fun = partial(FTOCP_LMPC, FTOCP_LMPC_Sol, M, G_LMPC, E_LMPC, n, it, SS_sel, TermPoint,  # Create the function to iterate
                               F, b, x[:, t, it], optimize, np, InitialGuess, Qfun_sel)
-                index = np.arange(0, PointSS*SSit)                                                                 # Create the index vector
-                Res = p.map(Fun, index)                                                                            # Run the process in parallel
-                CostQP = np.asarray(Res)                                                                                # Convert the result from list to array
+                index = np.arange(0, PointSS*SSit)                                                      # Create the index vector
+                Res = p.map(Fun, index)                                                                 # Run the process in parallel
+                CostQP = np.asarray(Res)                                                                # Convert the result from list to array
             else:
                 Fun = partial(FTOCP_LMPC_CVX_Cost, M_sparse, G_LMPC_sparse, E_LMPC_sparse, n, SS_sel, F_sparse, b,
                                                    x[:, t, it], np, Qfun_sel, qp, matrix, spmatrix)
-                index = np.arange(0, PointSS*SSit)                                                                 # Create the index vector
-                Res = p.map(Fun, index)                                                                            # Run the process in parallel
+                index = np.arange(0, PointSS*SSit)                                                      # Create the index vector
+                Res = p.map(Fun, index)                                                                 # Run the process in parallel
                 CostQP = np.asarray(Res)
 
         CostSingleQP = CostQP.reshape(SSit, PointSS)                            # Reshape in the more natural format: (Iteration) x (Time)
-        CostSingleQP1 = CostQP1.reshape(SSit, PointSS)                            # Reshape in the more natural format: (Iteration) x (Time)
         index = np.unravel_index(CostSingleQP.argmin(), CostSingleQP.shape)     # Select the indices (Iteration) x (Time) associated with the minimum cost
         j_star = index[0]
         i_star = index[1]
@@ -89,14 +68,6 @@ def LMPC(A, B, x, u, it, SSit, np, M, M_sparse, PointSS, SSindex, FTOCP_LMPC, FT
         if CVX ==0:
             [Sol, Feasible, _] = FTOCP_LMPC_Sol(M, G_LMPC, E_LMPC, n, SS_term, TermPoint,
                                             F, b, x[:, t, it], optimize, np, InitialGuess, [0], 0)
-
-            # [Sol1, Feasible1, _] = FTOCP_LMPC_CVX(M_sparse, G_LMPC_sparse, E_LMPC_sparse, n, SS_term, F_sparse, b,
-            #                                     x[:, t, it], np, Qfun_sel, qp, matrix, spmatrix, 0)
-            #
-            # print "CostSingleQP", CostSingleQP
-            # print "CostSingleQP1", CostSingleQP1
-            # print "Sol \n",Sol, Feasible
-            # print "Sol1 \n", Sol1, Feasible1
         else:
             [Sol, Feasible, _] = FTOCP_LMPC_CVX(M_sparse, G_LMPC_sparse, E_LMPC_sparse, n, SS_term, F_sparse, b,
                                                    x[:, t, it], np, Qfun_sel, qp, matrix, spmatrix, 0)
@@ -120,21 +91,23 @@ def LMPC(A, B, x, u, it, SSit, np, M, M_sparse, PointSS, SSindex, FTOCP_LMPC, FT
         x[:, t + 1, it] = SysEvolution(x[:, t, it], u[:, t, it], F_region, b_region, np, CurrentRegion, A, B)
         # print "Solver Time ", time.clock() - start_time, "seconds"
 
-        # Now check if the terminal point used as terminal constraint in the best QP is the terminal point of our task (i.e. the point closed to the origin for the (it-1-j_star)-th trajectory)
-        # This is checked propagating terminal point used as terminal constraint along the SS and checking if the value of the 0-th coordinate is equal to the initialization value
-        IndexTermPoint = SS_list[SelectReg[-1]][n, SSindex+i_star,it-1-j_star]
-        SelectReg[0:SelectReg.size-1] = SelectReg[1:SelectReg.size]
-
-        # print "Propagated Point: ", x[:, IndexTermPoint+1, it-1-j_star], " Terminal Point: ", SS_term[:,0]
-        # print "Traje: ", x[:, 0:IndexTermPoint + 3, it - 1 - j_star]
+        # Now check if the terminal point used as terminal constraint in the best QP is the terminal point of our task
+        # (i.e. the point closed to the origin for the (it-1-j_star)-th trajectory) This is checked propagating terminal
+        # point used as terminal constraint along the SS and checking if the value of the 0-th coordinate is equal to
+        # the initialization value
+        IndexTermPoint = SS_list[SelectReg[-1]][n, SSindex+i_star,it-1-j_star]  # Time index of the terminal point
 
         if x[1, IndexTermPoint+1, it-1-j_star] >= 10000:  # Here we check if the 0-th coordinate the propagated point equals the initilization value
-            ReachedTerminalPoint = 1                       # If so, set the flag to 1: the simulation is completed
+            ReachedTerminalPoint = 1                      # If so, set the flag to 1: the simulation is completed
         else:
-            SelectReg[-1] = CurrentRegion(x[:, IndexTermPoint + 1, it - 1 - j_star], F_region, b_region, np)
-            SSindex = int(np.where(SS_list[SelectReg[-1]][n, :, it - 1 - j_star ] == IndexTermPoint+1)[0])  # Now update the time index used for picking the first point in the trajectories of SS.
-                                                                                                            # This step is crucial to guarantee recursive feasibility. It is needed the
-                                                                                                            # propagated point in SS will be used as terminal constraint, so that the shifted solution is feasible for the LMPC.
+            # Compute in which regions of the candidate feasible solution belongs
+            SelectReg[0:SelectReg.size - 1] = SelectReg[1:SelectReg.size]                              # Shift 0:N
+            SelectReg[-1] = CurrentRegion(x[:, IndexTermPoint+1, it-1-j_star], F_region, b_region, np) # Compute for point N+1
+
+            # Now update the time index used for picking the first point in the trajectories of SS. This step is crucial
+            # to guarantee recursive feasibility. It is needed the propagated point in SS will be used as terminal
+            # constraint, so that the shifted solution is feasible for the LMPC.
+            SSindex = int(np.where(SS_list[SelectReg[-1]][n, :, it - 1 - j_star ] == IndexTermPoint+1)[0])
 
         # Update time index for the simulation
         t = t+1
@@ -144,8 +117,8 @@ def LMPC(A, B, x, u, it, SSit, np, M, M_sparse, PointSS, SSindex, FTOCP_LMPC, FT
     # Here we could have solved few QPs with different time horizons. This issue comes from the fact that we want to mimic an infinite horizon control problem.
     for i in range(1, N):
         u[:, t, it] = uPred[i]                              # Extract the input from the predicted ones
-        x[:, t + 1, it] = SysEvolution(x[:, t, it], u[:, t, it], F_region, b_region, np, CurrentRegion, A, B)     # Apply the input to the system
-        t = t + 1                                                                                                 # Update time index for the simulation
+        x[:, t + 1, it] = SysEvolution(x[:, t, it], u[:, t, it], F_region, b_region, np, CurrentRegion, A, B)  # Apply the input to the system
+        t = t + 1                                                                                              # Update time index for the simulation
 
     return x[:,:,it], u[:,:,it], t
 
