@@ -43,7 +43,7 @@ u_feasible = np.zeros((d,Time))      # Initialize the closed loop input
 F_region, b_region = DefineRegions(Vertex, Vrep, Hrep, np)
 
 # Set initial Conditions in Region 2
-x_feasible[:,0] = np.array([-1,2.5])
+x_feasible[:,0] = np.array([-1, 2.5])
 # Set initial Conditions in Region 0
 # x_feasible[:,0] = np.array([ 1, 0])
 
@@ -68,7 +68,7 @@ Parallel  = 1            # Set to 1 for multicore
 p = Pool(4)              # Initialize the pool for multicore
 Iteration = 10           # Max number of LMPC iterations (Need to define a priori the iterations as need to allocate memory)
 TimeLMPC  = Time + 20    # Max number of time steps at each LMPC iteration (If this number is exceed ---> ERROR)
-PointSS   = 10           # Number of point per iteration to use into SS
+PointSS   = 20           # Number of point per iteration to use into SS
 SSit      = 1            # Number of Iterations to use into SS
 toll      = 10**(-6)     # LMPC reaches convergence whenever J^{j} - J^{j+1} <= toll (i.e. the cost is not decreasing along the iterations)
 
@@ -194,4 +194,20 @@ print "Steps in Region 1, Firs Feasible Solution: ",list_start.count(2), " Stead
 print "Evolution First Feasible trajecotry and Steady state \n", list_start, "\n", list_it
 # print x[:,:,it]
 
-PlotRegionsResult(Vertex, plt, np, Vrep, Hrep, x_feasible, x[:,0:(Steps[it] + 1),it])
+# ======================================================================================================================
+# ================================================ PLOTS ===============================================================
+# ======================================================================================================================
+plt.plot(np.hstack(((Vertex[0])[:, 0], np.squeeze(Vertex[0])[0, 0])),
+             np.hstack(((Vertex[0])[:, 1], np.squeeze(Vertex[0])[0, 1])), "-rs")
+plt.plot(np.hstack(((Vertex[1])[:, 0], np.squeeze(Vertex[1])[0, 0])),
+         np.hstack(((Vertex[1])[:, 1], np.squeeze(Vertex[1])[0, 1])), "-ks")
+plt.plot(np.hstack(((Vertex[2])[:, 0], np.squeeze(Vertex[2])[0, 0])),
+         np.hstack(((Vertex[2])[:, 1], np.squeeze(Vertex[2])[0, 1])), "-bs")
+
+plt.plot(x[0,0:Steps[0],0], x[1,0:Steps[0],0], '-ro')
+plt.plot(x[0,0:Steps[it],it], x[1,0:Steps[it],it], '-bo')
+
+plt.xlim([-2.5, 2.5])
+plt.ylim([-1, 4.5])
+
+plt.show()
