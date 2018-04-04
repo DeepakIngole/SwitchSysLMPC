@@ -32,14 +32,13 @@ solvers.options['show_progress'] = False      # Turn off CVX messages
 
 F_region, b_region = DefineRegions(Vertex, Vrep, Hrep, np)
 
-x_feasible[:,0] = np.array([-2,0.5])          # Set initial Conditions
+x_feasible[:,0] = np.array([-1,2.5])          # Set initial Conditions
 K = np.array([0.4221,  1.2439])
 
 for i in range(0, Time):
     u_feasible[:,i] = -np.dot(K, x_feasible[:,i])
     x_feasible[:,i+1] = SysEvolution(x_feasible[:,i], u_feasible[:,i], F_region, b_region, np, CurrentRegion, A, B)
 
-print(x_feasible)
 
 PlotRegions(Vertex, plt, np, Vrep, Hrep, x_feasible)
 
@@ -53,7 +52,7 @@ CVX_LMPC  = 1            # Set to 1 for CVX
 Parallel  = 0            # Set to 1 for multicore
 p = Pool(4)              # Initialize the pool for multicore
 Iteration = 50           # Max number of LMPC iterations (Need to define a priori the iterations as need to allocate memory)
-TimeLMPC  = Time + 10    # Max number of time steps at each LMPC iteration (If this number is exceed ---> ERROR)
+TimeLMPC  = Time + 20    # Max number of time steps at each LMPC iteration (If this number is exceed ---> ERROR)
 PointSS   = 10           # Number of point per iteration to use into SS
 SSit      = 1            # Number of Iterations to use into SS
 toll      = 10**(-6)     # LMPC reaches convergence whenever J^{j} - J^{j+1} <= toll (i.e. the cost is not decreasing along the iterations)
@@ -87,7 +86,6 @@ for i in range(0, SSit):
     # STEP1: For each point in the previous trajectory, check to which region it belongs
     for j in range(0, Time+1):
         IndexVec[j] = CurrentRegion(x[:, j, i], F_region, b_region, np)
-        print x[:, j, i], IndexVec[j]
 
     # STEP2: Compute the cost to go along the realized trajectory
     TotCost[0:(Steps[i]+1), i] = ComputeCost(Q_LMPC, R_LMPC, x[:,0:(Steps[i]+1),0], u[:,0:(Steps[i]+0),0], np, int(Steps[i]))
@@ -109,7 +107,6 @@ for i in range(0, SSit):
 # Now start the LMPC loop for the iterations. We start from SSit, which is the number of iterations that we used from SS. Note that above we initialized the first SSit iterations
 # with the first feasible trajectory. Finally, the loop terminate at Iteraions, which is the max number of iterations allowed
 
-print M_LMPC
 for it in range(SSit, Iteration):
     x[:, 0, it] = x[:, 0, 0] # Set the initial conditions for the it-th iteration
 
@@ -157,7 +154,6 @@ for it in range(SSit, Iteration):
 
 
 
-# print x[:,:,it]
 
 list_it = []
 for i in range(0, int(Steps[it])+1):
@@ -167,6 +163,10 @@ list_start = []
 for i in range(0, int(Steps[0])+1):
     list_start.append(CurrentRegion(x[:,i,0], F_region, b_region, np))
 
-print list_start.count(1), list_it.count(1)
+print "Steps in Region 0, Firs Feasible Solution: ",list_start.count(0), " Steady State: ", list_it.count(0)
+print "Steps in Region 1, Firs Feasible Solution: ",list_start.count(1), " Steady State: ", list_it.count(1)
+print "Steps in Region 1, Firs Feasible Solution: ",list_start.count(2), " Steady State: ", list_it.count(2)
+
+# print x[:,:,it]
 
 PlotRegionsResult(Vertex, plt, np, Vrep, Hrep, x_feasible, x[:,0:(Steps[it] + 1),it])

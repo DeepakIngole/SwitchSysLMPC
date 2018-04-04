@@ -88,10 +88,10 @@ def BuildMatIneqConst(N, n, np, linalg, spmatrix, Fx, bx, SelectReg):
                    [[ 1.],
                     [-1.]]])
 
-    bu = np.array([[[ 1.],
-                    [ 1.]],
-                   [[ 1.],
-                    [ 1.]]])
+    bu = np.array([[[ 3.],
+                    [ 3.]],
+                   [[ 3.],
+                    [ 3.]]])
 
     # Now stuck the constraint matrices to express them in the form Fz<=b. Note that z collects states and inputs
     # Let's start by computing the submatrix of F relates with the state

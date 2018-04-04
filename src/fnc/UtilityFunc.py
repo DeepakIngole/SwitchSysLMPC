@@ -22,9 +22,9 @@ def DefSystem(np):
 
     R = np.array(10)
 
-    Q_LMPC = 0.0000000001*np.eye(2)
+    Q_LMPC = 1*np.eye(2)
 
-    R_LMPC = 100000*np.array(1)
+    R_LMPC = 1*np.array(1)
 
     Vertex = [np.array([[    2,  1],
                         [-0.075,  1],
