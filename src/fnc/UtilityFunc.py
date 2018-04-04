@@ -66,7 +66,7 @@ def CurrentRegion(x, F_region, b_region, np):
     NumRegions = len(F_region) # Number of Regions
 
     Region = np.inf
-    toll = 1e-15
+    toll = 0*1e-15
     for i in range(0, NumRegions):
         if np.alltrue(np.dot(F_region[i], x) <= b_region[i] + toll*np.ones(b_region[i].shape)):
             Region = i

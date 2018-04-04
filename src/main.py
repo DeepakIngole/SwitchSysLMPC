@@ -48,10 +48,10 @@ PlotRegions(Vertex, plt, np, Vrep, Hrep, x_feasible)
 print("========= STARTING LMPC CODE =========")
 
 # Setting the LMPC parameters
-CVX_LMPC  = 1            # Set to 1 for CVX
+CVX_LMPC  = 0            # Set to 1 for CVX <---------------- THIS MUST BE SET TO 1, CURRENTLY WORKING ONLY WITH CVX
 Parallel  = 0            # Set to 1 for multicore
 p = Pool(4)              # Initialize the pool for multicore
-Iteration = 50           # Max number of LMPC iterations (Need to define a priori the iterations as need to allocate memory)
+Iteration = 10           # Max number of LMPC iterations (Need to define a priori the iterations as need to allocate memory)
 TimeLMPC  = Time + 20    # Max number of time steps at each LMPC iteration (If this number is exceed ---> ERROR)
 PointSS   = 10           # Number of point per iteration to use into SS
 SSit      = 1            # Number of Iterations to use into SS
@@ -73,7 +73,7 @@ u            = 10000*np.ones((d, TimeLMPC+0, Iteration))  # Input associated wit
 Steps        = 10000*np.ones((Iteration))                 # This vector collests the actual time at which each iteratin is completed (Remember: it was needed to pre-allocate memory)
 IndexVec     = 10000*np.ones(TimeLMPC+1)                  # This vector will be used to assign the data to the sample safe set
 TotCost      = 10000*np.ones((TimeLMPC+1, Iteration))     # This vector will be used to assign the cost to the Qfunction
-SelectReg    = 100*np.ones(N+1).astype(int)                # This vector collects the region to which the candidate feasible solution belongs to
+SelectReg    = 10000*np.ones(N+1).astype(int)                # This vector collects the region to which the candidate feasible solution belongs to
 InitialGuess = np.zeros(((N+1)*n+N*d))                     # Initial guess for the QP solver
 
 # Now given the number of iteration SSit that we want to use in the LMPC we initialize the SS and Qfun
