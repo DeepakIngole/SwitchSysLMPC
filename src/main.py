@@ -30,7 +30,7 @@ solvers.options['show_progress'] = False      # Turn off CVX messages
 # Scipy solver is not stable, check the branch Test_scipy_CVX_Solver for and example where it fails
 
 # Initialization
-Time = 30                            # Number of simulation's time steps for first feasible trajectory
+Time = 40                            # Number of simulation's time steps for first feasible trajectory
 n = 2                                # State Dimensions
 d = 1                                # Input Dimensions
 x_feasible = np.zeros((n,Time+1))    # Initialize the closed loop trajectory
@@ -50,7 +50,7 @@ x_feasible[:,0] = np.array([-1, 2.5])
 K = np.array([0.4221,  1.2439]) # Pick feedback gain for the first feasible trajectory
 # Time loop: apply the above feedback gain
 for i in range(0, Time):
-    u_feasible[:,i] = -np.dot(K, x_feasible[:,i])
+    u_feasible[:,i] = -0*np.dot(K, x_feasible[:,i])
     x_feasible[:,i+1] = SysEvolution(x_feasible[:,i], u_feasible[:,i], F_region, b_region, np, CurrentRegion, A, B)
 
 PlotRegions(Vertex, plt, np, x_feasible)
@@ -61,14 +61,14 @@ PlotRegions(Vertex, plt, np, x_feasible)
 print "====================================== STARTING LMPC CODE ==============================================="
 
 # Setting the LMPC parameters
-N = 3                    # Controller's horizon
+N = 4                    # Controller's horizon
 CVX_LMPC  = 1            # Set to 1 for CVX <---------------- THIS MUST BE SET TO 1, CURRENTLY WORKING ONLY WITH CVX
 Parallel  = 1            # Set to 1 for multicore
 p = Pool(4)              # Initialize the pool for multicore
-Iteration = 11           # Max number of LMPC iterations (Need to define a priori the iterations as need to allocate memory)
+Iteration = 50           # Max number of LMPC iterations (Need to define a priori the iterations as need to allocate memory)
 TimeLMPC  = Time + 20    # Max number of time steps at each LMPC iteration (If this number is exceed ---> ERROR)
-PointSS   = 10           # Number of point per iteration to use into SS
-SSit      = 3            # Number of Iterations to use into SS
+PointSS   = 5           # Number of point per iteration to use into SS
+SSit      = 1            # Number of Iterations to use into SS
 toll      = 10**(-6)     # LMPC reaches convergence whenever J^{j} - J^{j+1} <= toll (i.e. the cost is not decreasing along the iterations)
 
 # Create the samples safe set for each region. SS_list is a list of array and each array is the sample safe set in one

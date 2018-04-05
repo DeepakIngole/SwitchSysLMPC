@@ -2,12 +2,12 @@ def DefSystem(np):
 
     # A \in \mathbb{R}^{n \dot n \dot r} where n in the dimension of the state and r is the number of regions
     # basically A[:,:,1] is the system dynamics in region 1
-    A = [np.array([[1.0, 1.0],
-                   [0., 1.0]]),
-         np.array([[0.9, 0.7],
-                   [0. , 0.9]]),
-         np.array([[0.6, 0.4],
-                   [0., 0.7]])]
+    A = [np.array([[0.8,0.1],
+                   [0., 0.8]]),
+         np.array([[0.85, 0.15],
+                   [0. , 0.85]]),
+         np.array([[0.9, 0.2],
+                   [0., 0.9]])]
 
     # B \in \mathbb{R}^{n \dot d \dot r} where n and d are the dimensions of the state and inputs and r is the number of regions
     # basically B[:,:,1] is the B matrix in region 1
@@ -27,11 +27,11 @@ def DefSystem(np):
     R_LMPC = 1*np.array(1)
 
     Vertex = [np.array([[    2,  1],
-                        [-0.075,  1],
-                        [-0.075, -1],
+                        [0.075,  1],
+                        [0.075, -1],
                         [    2, -1]]),
-              np.array([[-0.075,  1],
-                        [-0.075, -1],
+              np.array([[0.075,  1],
+                        [0.075, -1],
                         [-2, -1],
                         [-2,  1]]),
               np.array([[2, 3],
