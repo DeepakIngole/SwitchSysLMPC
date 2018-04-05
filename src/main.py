@@ -68,7 +68,7 @@ Parallel  = 1            # Set to 1 for multicore
 p = Pool(4)              # Initialize the pool for multicore
 Iteration = 10           # Max number of LMPC iterations (Need to define a priori the iterations as need to allocate memory)
 TimeLMPC  = Time + 20    # Max number of time steps at each LMPC iteration (If this number is exceed ---> ERROR)
-PointSS   = 20           # Number of point per iteration to use into SS
+PointSS   = 10           # Number of point per iteration to use into SS
 SSit      = 1            # Number of Iterations to use into SS
 toll      = 10**(-6)     # LMPC reaches convergence whenever J^{j} - J^{j+1} <= toll (i.e. the cost is not decreasing along the iterations)
 
@@ -109,9 +109,9 @@ for i in range(0, SSit):
     # STEP3: Assign the realized trajectory and the cost to go to the lists SS_list and Qfun_list
     for r in range(0, NumRegions):
         if IndexVec[IndexVec==r].size:
-            SS_list[r][0:n,0:IndexVec[IndexVec == r].size,i] = x[: , IndexVec==r, 0]                 # Now initialize the Sampled Safe set (SS)
-            SS_list[r][n,0:IndexVec[IndexVec == r].size,i]   = np.where(IndexVec==r)[0]              # Now initialize the Sampled Safe set (SS)
-            Qfun_list[r][0:IndexVec[IndexVec == r].size,i]   = TotCost[IndexVec==r, i]
+            SS_list[r][0:n,0:IndexVec[IndexVec == r].size, i] = x[: , IndexVec==r, 0]                 # Now initialize the Sampled Safe set (SS)
+            SS_list[r][n,0:IndexVec[IndexVec == r].size, i]   = np.where(IndexVec==r)[0]              # Now initialize the Sampled Safe set (SS)
+            Qfun_list[r][0:IndexVec[IndexVec == r].size, i]   = TotCost[IndexVec==r, i]
 
     # Print Cost and time steps for first trajectories in SS
     print("Feasible Iteration: %d, Time Steps %.1f, Iteration Cost: %.5f" % (i, Steps[i], TotCost[0, i]))
@@ -157,7 +157,8 @@ for it in range(SSit, Iteration):
 
     # STEP2: Compute the cost to go along the realized trajectory
     TotCost[0:(Steps[it] + 1), it] = ComputeCost(Q_LMPC, R_LMPC, x[:, 0:(Steps[it] + 1), it],
-                                                 u[:, 0:(Steps[it] + 0), it], np, int(Steps[it]))[0]
+                                                 u[:, 0:(Steps[it] + 0), it], np, int(Steps[it]))
+
     # STEP3: Assign the realized trajectory and the cost to go to the lists SS_list and Qfun_list
     for r in range(0, NumRegions):
         if IndexVec[IndexVec==r].size:
