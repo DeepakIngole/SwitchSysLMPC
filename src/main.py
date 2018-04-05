@@ -1,8 +1,7 @@
 import sys
 sys.path.append('fnc')
-from UtilityFunc import DefSystem, DefineRegions, PlotRegions, CurrentRegion, SysEvolution, PlotRegionsResult
-from FTOCP import BuildMatEqConst, BuildMatCost, FTOCP, GetPred, BuildMatIneqConst, FTOCP_CVX
-from ComputeFeasibleSolution import ComputeFeasibleSolution
+from UtilityFunc import DefSystem, DefineRegions, PlotRegions, CurrentRegion, SysEvolution, \
+    BuildMatIneqConst, GetPred, BuildMatCost, BuildMatEqConst
 from LMPCfunc import ComputeCost
 from LMPC import LMPC, BuildMatCostLMPC, FTOCP_LMPC, FTOCP_LMPC_Sol, BuildMatEqConst_LMPC, FTOCP_LMPC_CVX, FTOCP_LMPC_CVX_Cost
 from pathos.multiprocessing import ProcessingPool as Pool
@@ -54,7 +53,7 @@ for i in range(0, Time):
     u_feasible[:,i] = -np.dot(K, x_feasible[:,i])
     x_feasible[:,i+1] = SysEvolution(x_feasible[:,i], u_feasible[:,i], F_region, b_region, np, CurrentRegion, A, B)
 
-PlotRegions(Vertex, plt, np, Vrep, Hrep, x_feasible)
+PlotRegions(Vertex, plt, np, x_feasible)
 
 # ======================================================================================================================
 # ================== Now that we have the first feasible solution we are ready for the LMPC ============================
@@ -66,10 +65,10 @@ N = 3                    # Controller's horizon
 CVX_LMPC  = 1            # Set to 1 for CVX <---------------- THIS MUST BE SET TO 1, CURRENTLY WORKING ONLY WITH CVX
 Parallel  = 1            # Set to 1 for multicore
 p = Pool(4)              # Initialize the pool for multicore
-Iteration = 10           # Max number of LMPC iterations (Need to define a priori the iterations as need to allocate memory)
+Iteration = 11           # Max number of LMPC iterations (Need to define a priori the iterations as need to allocate memory)
 TimeLMPC  = Time + 20    # Max number of time steps at each LMPC iteration (If this number is exceed ---> ERROR)
 PointSS   = 10           # Number of point per iteration to use into SS
-SSit      = 1            # Number of Iterations to use into SS
+SSit      = 3            # Number of Iterations to use into SS
 toll      = 10**(-6)     # LMPC reaches convergence whenever J^{j} - J^{j+1} <= toll (i.e. the cost is not decreasing along the iterations)
 
 # Create the samples safe set for each region. SS_list is a list of array and each array is the sample safe set in one
