@@ -114,8 +114,8 @@ def BuildMatIneqConst(N, n, np, linalg, spmatrix, Fx, bx, SelectReg):
     bxtot  = np.empty(0)
 
     for i in range(0, N): # No need to constraint also the terminal point --> go up to N
-        MatFx = linalg.block_diag(MatFx, Fx[SelectReg[i]])
-        bxtot  = np.append(bxtot, bx[SelectReg[i]])
+        MatFx = linalg.block_diag(MatFx, Fx[int(SelectReg[i])])
+        bxtot  = np.append(bxtot, bx[int(SelectReg[i])])
 
     NoTerminalConstr = np.zeros((np.shape(MatFx)[0], n))  # No need to constraint also the terminal point
     Fxtot = np.hstack((MatFx, NoTerminalConstr))
@@ -149,10 +149,10 @@ def BuildMatEqConst(A ,B ,N ,n ,d ,np, spmatrix, SelectedRegions):
     for i in range(0, N):
         ind1 = n + i * n + np.arange(n)
         ind2x = i * n + np.arange(n)
-        Gx[np.ix_(ind1, ind2x)] = -A[SelectedRegions[i]]
+        Gx[np.ix_(ind1, ind2x)] = -A[int(SelectedRegions[i])]
 
         ind2u = i * d + np.arange(d)
-        Gu[np.ix_(ind1, ind2u)] = -B[SelectedRegions[i]]
+        Gu[np.ix_(ind1, ind2u)] = -B[int(SelectedRegions[i])]
 
     G = np.hstack((Gx, Gu))
     E = np.zeros((n * (N + 1), n))

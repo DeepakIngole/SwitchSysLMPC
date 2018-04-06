@@ -3,7 +3,8 @@ sys.path.append('fnc')
 from UtilityFunc import DefSystem, DefineRegions, PlotRegions, CurrentRegion, SysEvolution, \
     BuildMatIneqConst, GetPred, BuildMatCost, BuildMatEqConst
 from LMPCfunc import ComputeCost
-from LMPC import LMPC, BuildMatCostLMPC, FTOCP_LMPC, FTOCP_LMPC_Sol, BuildMatEqConst_LMPC, FTOCP_LMPC_CVX, FTOCP_LMPC_CVX_Cost
+from LMPC import LMPC, BuildMatCostLMPC, FTOCP_LMPC, FTOCP_LMPC_Sol, BuildMatEqConst_LMPC, \
+    FTOCP_LMPC_CVX, FTOCP_LMPC_CVX_Cost, FTOCP_LMPC_CVX_Cost_Parallel
 from pathos.multiprocessing import ProcessingPool as Pool
 from functools import partial
 import datetime
@@ -70,7 +71,7 @@ p = Pool(4)              # Initialize the pool for multicore
 Iteration = 50           # Max number of LMPC iterations (Need to define a priori the iterations as need to allocate memory)
 TimeLMPC  = Time + 20    # Max number of time steps at each LMPC iteration (If this number is exceed ---> ERROR)
 PointSS   = 10           # Number of point per iteration to use into SS
-SSit      = 2            # Number of Iterations to use into SS
+SSit      = 5            # Number of Iterations to use into SS
 toll      = 10**(-6)     # LMPC reaches convergence whenever J^{j} - J^{j+1} <= toll (i.e. the cost is not decreasing along the iterations)
 
 # Create the samples safe set for each region. SS_list is a list of array and each array is the sample safe set in one
@@ -90,7 +91,7 @@ u            = 10000*np.ones((d, TimeLMPC+0, Iteration))  # Input associated wit
 Steps        = 10000*np.ones((Iteration))                 # This vector collests the actual time at which each iteratin is completed (Remember: it was needed to pre-allocate memory)
 IndexVec     = 10000*np.ones(TimeLMPC+1)                  # This vector will be used to assign the data to the sample safe set
 TotCost      = 10000*np.ones((TimeLMPC+1, Iteration))     # This vector will be used to assign the cost to the Qfunction
-SelectReg    = 10000*np.ones(N+1).astype(int)             # This vector collects the region to which the candidate feasible solution belongs to
+SelectReg    = 10000*np.ones(N+1)             # This vector collects the region to which the candidate feasible solution belongs to
 InitialGuess = np.zeros(((N+1)*n+N*d))                    # Initial guess for the QP solver
 
 # Initialize SS and Qfun
@@ -147,7 +148,7 @@ for it in range(SSit, Iteration):
                                                 CVX_LMPC, spmatrix, qp, matrix, SelectReg, BuildMatEqConst,
                                                 BuildMatEqConst_LMPC, BuildMatIneqConst, F_region, b_region,
                                                 CurrentRegion, SysEvolution, TotCost, plt, Vertex,
-                                                Steps, NumberPlots, IterationPlot)
+                                                Steps, NumberPlots, IterationPlot, FTOCP_LMPC_CVX_Cost_Parallel)
 
     # LMPC iteration is completed: Stop the timer
     endTimer = datetime.datetime.now()
