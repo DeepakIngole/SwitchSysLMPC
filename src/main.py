@@ -66,12 +66,12 @@ NumberPlots = 0          # Show plot of predicted trajectory if NumberPlots > 0
 IterationPlot = 17       # If (NumberPlots == 1) and (IterationPlot =>it >= IterationPlot + NumberPlots) ---> Show plot
 N = 4                    # Controller's horizon
 SwLogic   = 1            # Activate transition logic based on the evolution recorded trajectory is SS
-Parallel  = 1            # Set to 1 for multicore (Note if SwLogic == 1 --> Need to start several threats ---> slower then single core (can be improved))
+Parallel  = 0            # Set to 1 for multicore (Note if SwLogic == 1 --> Need to start several threats ---> slower then single core (can be improved))
 p = Pool(4)              # Initialize the pool for multicore
 Iteration = 50           # Max number of LMPC iterations (Need to define a priori the iterations as need to allocate memory)
 TimeLMPC  = Time + 20    # Max number of time steps at each LMPC iteration (If this number is exceed ---> ERROR)
 PointSS   = 10           # Number of point per iteration to use into SS
-SSit      = 4            # Number of Iterations to use into SS
+SSit      = 1            # Number of Iterations to use into SS
 toll      = 10**(-6)     # LMPC reaches convergence whenever J^{j} - J^{j+1} <= toll (i.e. the cost is not decreasing along the iterations)
 
 # Create the samples safe set for each region. SS_list is a list of array and each array is the sample safe set in one
