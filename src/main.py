@@ -71,7 +71,7 @@ p = Pool(4)              # Initialize the pool for multicore
 Iteration = 50           # Max number of LMPC iterations (Need to define a priori the iterations as need to allocate memory)
 TimeLMPC  = Time + 20    # Max number of time steps at each LMPC iteration (If this number is exceed ---> ERROR)
 PointSS   = 10           # Number of point per iteration to use into SS
-SSit      = 5            # Number of Iterations to use into SS
+SSit      = 1            # Number of Iterations to use into SS
 toll      = 10**(-6)     # LMPC reaches convergence whenever J^{j} - J^{j+1} <= toll (i.e. the cost is not decreasing along the iterations)
 
 # Create the samples safe set for each region. SS_list is a list of array and each array is the sample safe set in one
