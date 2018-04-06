@@ -58,11 +58,11 @@ def DefineRegions(Vertex, Vrep, Hrep, np):
     return F_region,b_region
 
 def SysEvolution(x, u, F_region, b_region, np, CurrentRegion, A, B):
-    CurrReg = CurrentRegion(x, F_region, b_region, np)
+    CurrReg = CurrentRegion(x, F_region, b_region, np, 1)
     x_next = np.dot(A[CurrReg],x) + np.dot(B[CurrReg],u)
     return x_next
 
-def CurrentRegion(x, F_region, b_region, np):
+def CurrentRegion(x, F_region, b_region, np, Verbose):
     NumRegions = len(F_region) # Number of Regions
 
     Region = np.inf
@@ -72,7 +72,8 @@ def CurrentRegion(x, F_region, b_region, np):
             Region = i
             break
     if Region == np.inf:
-        print "ERROR: ",x," Outside Feasible Region"
+        if Verbose == 1:
+            print "ERROR: ",x," Outside Feasible Region"
 
     return Region
 

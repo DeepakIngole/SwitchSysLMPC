@@ -63,7 +63,7 @@ print "====================================== STARTING LMPC CODE ===============
 # Setting the LMPC parameters
 N = 4                    # Controller's horizon
 CVX_LMPC  = 1            # Set to 1 for CVX <---------------- THIS MUST BE SET TO 1, CURRENTLY WORKING ONLY WITH CVX
-Parallel  = 1            # Set to 1 for multicore
+Parallel  = 0            # Set to 1 for multicore
 p = Pool(4)              # Initialize the pool for multicore
 Iteration = 50           # Max number of LMPC iterations (Need to define a priori the iterations as need to allocate memory)
 TimeLMPC  = Time + 20    # Max number of time steps at each LMPC iteration (If this number is exceed ---> ERROR)
@@ -100,7 +100,7 @@ for i in range(0, SSit):
     # Build SS and Q-function using previous data (3 STEPS)
     # STEP1: For each point in the previous trajectory, check to which region it belongs
     for j in range(0, Time+1):
-        IndexVec[j] = CurrentRegion(x[:, j, i], F_region, b_region, np)
+        IndexVec[j] = CurrentRegion(x[:, j, i], F_region, b_region, np, 1)
 
     # STEP2: Compute the cost to go along the realized trajectory
     TotCost[0:(Steps[i]+1), i] = ComputeCost(Q_LMPC, R_LMPC, x[:,0:(Steps[i]+1),0], u[:,0:(Steps[i]+0),0], np, int(Steps[i]))
@@ -128,12 +128,12 @@ for it in range(SSit, Iteration):
     # At time t=0 the candidate solution to the LMPC is x[:, 0:N, it-1] --> need to check in which regions this N steps
     # trajectory lies. This will allows us to select the regions in the LMPC
     for j in range(0, N+1):
-        SelectReg[j] = CurrentRegion(x[:, j, it-1], F_region, b_region, np) # For each time steps compute the region in
-                                                                            # which the feasible trajectory lies
+        SelectReg[j] = CurrentRegion(x[:, j, it-1], F_region, b_region, np, 1) # For each time steps compute the region in
+                                                                               # which the feasible trajectory lies
 
     # SSindex is the time index which corresponds to the point is the Sample Safe set which is the terminal point of the
     # candidate feasible solution.
-    SSindex = int(np.where(SS_list[SelectReg[-1]][n, :, it - 1] == N)[0])
+    SSindex = N
 
     startTimer = datetime.datetime.now() # Start timer for LMPC iteration
     [x[:,:, it], u[:,:, it], Steps[it] ] = LMPC(A, B, x, u, it, SSit, np, M_LMPC,  # Solve the LMPC problem at the i-th iteration
@@ -143,7 +143,8 @@ for it in range(SSit, Iteration):
                                                 n, d, N, SS_list, Qfun_list, linalg,
                                                 optimize, InitialGuess, GetPred, time, Parallel, p, partial,
                                                 CVX_LMPC, spmatrix, qp, matrix, SelectReg, BuildMatEqConst,
-                                                BuildMatEqConst_LMPC, BuildMatIneqConst, F_region, b_region, CurrentRegion, SysEvolution)
+                                                BuildMatEqConst_LMPC, BuildMatIneqConst, F_region, b_region,
+                                                CurrentRegion, SysEvolution, TotCost)
 
     # LMPC iteration is completed: Stop the timer
     endTimer = datetime.datetime.now()
@@ -152,7 +153,7 @@ for it in range(SSit, Iteration):
     # Build SS and Q-function using previous data (3 STEPS)
     # STEP1: For each point in the previous trajectory, check to which region it belongs
     for j in range(0, int(Steps[it])+1):
-        IndexVec[j] = CurrentRegion(x[:, j, it], F_region, b_region, np)
+        IndexVec[j] = CurrentRegion(x[:, j, it], F_region, b_region, np, 1)
 
     # STEP2: Compute the cost to go along the realized trajectory
     TotCost[0:(Steps[it] + 1), it] = ComputeCost(Q_LMPC, R_LMPC, x[:, 0:(Steps[it] + 1), it],
@@ -182,11 +183,11 @@ for it in range(SSit, Iteration):
 # Now compute in which regions the first feasible trajectory and the steady state solution lie
 list_it = []
 for i in range(0, int(Steps[it])+1):
-    list_it.append(CurrentRegion(x[:,i,it], F_region, b_region, np))
+    list_it.append(CurrentRegion(x[:,i,it], F_region, b_region, np, 1))
 
 list_start = []
 for i in range(0, int(Steps[0])+1):
-    list_start.append(CurrentRegion(x[:,i,0], F_region, b_region, np))
+    list_start.append(CurrentRegion(x[:,i,0], F_region, b_region, np, 1))
 
 print "Steps in Region 0, Firs Feasible Solution: ",list_start.count(0), " Steady State: ", list_it.count(0)
 print "Steps in Region 1, Firs Feasible Solution: ",list_start.count(1), " Steady State: ", list_it.count(1)
@@ -204,8 +205,11 @@ plt.plot(np.hstack(((Vertex[1])[:, 0], np.squeeze(Vertex[1])[0, 0])),
 plt.plot(np.hstack(((Vertex[2])[:, 0], np.squeeze(Vertex[2])[0, 0])),
          np.hstack(((Vertex[2])[:, 1], np.squeeze(Vertex[2])[0, 1])), "-bs")
 
-plt.plot(x[0,0:Steps[0],0], x[1,0:Steps[0],0], '-ro')
-plt.plot(x[0,0:Steps[it],it], x[1,0:Steps[it],it], '-bo')
+plt.plot(x[0,0:Steps[0]+1,0], x[1,0:Steps[0]+1,0], '-ro')
+for i in range(1,it):
+    plt.plot(x[0, 0:Steps[i] + 1, i], x[1, 0:Steps[i] + 1, i], '-ro')
+
+plt.plot(x[0,0:Steps[it]+1,it], x[1,0:Steps[it]+1,it], '-bo')
 
 plt.xlim([-2.5, 2.5])
 plt.ylim([-1, 4.5])
