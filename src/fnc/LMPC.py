@@ -1,6 +1,7 @@
 def LMPC(A, B, x, u, it, SSit, np, M, M_sparse, PointSS, SSindex, FTOCP_LMPC, FTOCP_LMPC_Sol, FTOCP_LMPC_CVX, FTOCP_LMPC_CVX_Cost,
          n, d, N, SS_list, Qfun_list, linalg, optimize, InitialGuess, GetPred, time, Parallel, p, partial, CVX, spmatrix, qp, matrix,
-         SelectReg, BuildMatEqConst, BuildMatEqConst_LMPC, BuildMatIneqConst, F_region, b_region, CurrentRegion, SysEvolution, TotCost):
+         SelectReg, BuildMatEqConst, BuildMatEqConst_LMPC, BuildMatIneqConst, F_region, b_region, CurrentRegion, SysEvolution, TotCost,
+         plt, Vertex, Steps, NumberPlots, IterationPlot):
     # ==================================================================================================================
     # ========================== This functions run the it-th LMPC closed loop iteration ===============================
     # ==================================================================================================================
@@ -43,10 +44,8 @@ def LMPC(A, B, x, u, it, SSit, np, M, M_sparse, PointSS, SSindex, FTOCP_LMPC, FT
                                                                                                         spmatrix)  # Add the terminal constraint
                 [F, b, F_sparse] = BuildMatIneqConst(N, n, np, linalg, spmatrix, F_region, b_region, SelectReg)
 
-                List_G.append(G_LMPC_sparse)
-                List_E.append(E_LMPC_sparse)
-                List_F.append(F_sparse)
-                List_b.append(b)
+                List_G.append(G_LMPC_sparse), List_E.append(E_LMPC_sparse)
+                List_F.append(F_sparse), List_b.append(b)
 
             else:
                 if SS_sel[0, i] >= 10000:
@@ -61,16 +60,18 @@ def LMPC(A, B, x, u, it, SSit, np, M, M_sparse, PointSS, SSindex, FTOCP_LMPC, FT
                                                                                                      spmatrix)  # Add the terminal constraint
                     [F, b, F_sparse] = BuildMatIneqConst(N, n, np, linalg, spmatrix, F_region, b_region, SelectReg)
 
-                    List_G.append([])
-                    List_E.append([])
-                    List_F.append([])
-                    List_b.append([])
+                    List_G.append([]), List_E.append([])
+                    List_F.append([]), List_b.append([])
 
                 else:
                     # Compute in which regions of the candidate feasible solution belongs
                     UpdateSelectReg[0] = SelectReg[0]
-                    UpdateSelectReg[1:N] = SelectReg[2:N + 1]
-                    UpdateSelectReg[N] = CurrentRegion(SS_sel[:, i], F_region, b_region, np, 0)  # Compute for point N+1
+                    for l in range(0,N):
+                        if SS_sel[0, i-l] >= 10000:
+                            UpdateSelectReg[N - l] = SelectReg[0]
+                        else:
+                            UpdateSelectReg[N-l] = CurrentRegion(SS_sel[:, i-l], F_region, b_region, np, 0)  # Compute for point N+1
+                    # print "Time: ", t, UpdateSelectReg
                     List_SelectReg.append(UpdateSelectReg)
                     [G_FTOCP, E_FTOCP, _, _] = BuildMatEqConst(A, B, N, n, d, np, spmatrix,
                                                                UpdateSelectReg)  # Write the dynamics as equality constraint
@@ -79,10 +80,8 @@ def LMPC(A, B, x, u, it, SSit, np, M, M_sparse, PointSS, SSindex, FTOCP_LMPC, FT
                                                                                                      spmatrix)  # Add the terminal constraint
                     [F, b, F_sparse] = BuildMatIneqConst(N, n, np, linalg, spmatrix, F_region, b_region, UpdateSelectReg)
 
-                    List_G.append(G_LMPC_sparse)
-                    List_E.append(E_LMPC_sparse)
-                    List_F.append(F_sparse)
-                    List_b.append(b)
+                    List_G.append(G_LMPC_sparse), List_E.append(E_LMPC_sparse)
+                    List_F.append(F_sparse), List_b.append(b)
 
         if Parallel == 0:
             for i in range(0, PointSS*SSit):          # Loop over the latest PointSS*SSit points
@@ -102,6 +101,7 @@ def LMPC(A, B, x, u, it, SSit, np, M, M_sparse, PointSS, SSindex, FTOCP_LMPC, FT
                     else:
                         _, _, CostQP[i] = FTOCP_LMPC_CVX(M_sparse, List_G, List_E, n, SS_sel, List_F, List_b,
                                                x[:, t, it], np, Qfun_sel, qp, matrix, spmatrix, i)
+                        # print "Cost QP is :",CostQP[i],  List_SelectReg[i], "Term Point: ", SS_sel[:,i]
                 # else:
                 #     if SS_sel[0, i] >= 10000:
                 #         CostQP[i] = 10000
@@ -133,8 +133,8 @@ def LMPC(A, B, x, u, it, SSit, np, M, M_sparse, PointSS, SSindex, FTOCP_LMPC, FT
                 Res = p.map(Fun, index)                                                                 # Run the process in parallel
                 CostQP = np.asarray(Res)                                                                # Convert the result from list to array
             else:
-                Fun = partial(FTOCP_LMPC_CVX_Cost, M_sparse, G_LMPC_sparse, E_LMPC_sparse, n, SS_sel, F_sparse, b,
-                                                   x[:, t, it], np, Qfun_sel, qp, matrix, spmatrix)
+                Fun = partial(FTOCP_LMPC_CVX_Cost, M_sparse, List_G, List_E, n, SS_sel, List_F, List_b,
+                                               x[:, t, it], np, Qfun_sel, qp, matrix, spmatrix)
                 index = np.arange(0, PointSS*SSit)                                                      # Create the index vector
                 Res = p.map(Fun, index)                                                                 # Run the process in parallel
                 CostQP = np.asarray(Res)
@@ -144,36 +144,38 @@ def LMPC(A, B, x, u, it, SSit, np, M, M_sparse, PointSS, SSindex, FTOCP_LMPC, FT
         j_star = index[0]
         i_star = index[1]
 
-        SS_term[:,0] = x[0:n, SSindex+i_star,it-1-j_star]                        # Pick the terminal point associated with the best cost
-
-
         IndexSelectReg = CostQP.argmin()
 
-        List_G = []
-        List_E = []
-        List_F = []
-        List_b = []
-        [G_FTOCP, E_FTOCP, _, _] = BuildMatEqConst(A, B, N, n, d, np, spmatrix,
-                                                   List_SelectReg[IndexSelectReg])  # Write the dynamics as equality constraint
-        [G_LMPC, E_LMPC, TermPoint, G_LMPC_sparse, E_LMPC_sparse] = BuildMatEqConst_LMPC(G_FTOCP, E_FTOCP,
-                                                                                         N, n, d, np,
-                                                                                         spmatrix)  # Add the terminal constraint
-        [F, b, F_sparse] = BuildMatIneqConst(N, n, np, linalg, spmatrix, F_region, b_region, List_SelectReg[IndexSelectReg])
-
-        List_G.append(G_LMPC_sparse)
-        List_E.append(E_LMPC_sparse)
-        List_F.append(F_sparse)
-        List_b.append(b)
+        # print "==== Selected: ", CostQP[IndexSelectReg], List_SelectReg[IndexSelectReg], "Term Point: ", SS_sel[:,IndexSelectReg], j_star, i_star
         # Solve the Finite Time Optimal Control Problem (FTOCP): This time get the optimal input and also the predicted trajectory
         if CVX ==0:
             [Sol, Feasible, _] = FTOCP_LMPC_Sol(M, G_LMPC, E_LMPC, n, SS_term, TermPoint,
                                             F, b, x[:, t, it], optimize, np, InitialGuess, [0], 0)
         else:
-            [Sol, Feasible, _] = FTOCP_LMPC_CVX(M_sparse, List_G, List_E, n, SS_term, List_F, List_b,
-                                                   x[:, t, it], np, Qfun_sel, qp, matrix, spmatrix, 0)
+            [Sol, Feasible, _] = FTOCP_LMPC_CVX(M_sparse, List_G, List_E, n, SS_sel, List_F, List_b,
+                                                   x[:, t, it], np, Qfun_sel, qp, matrix, spmatrix, IndexSelectReg)
 
 
         [xPred, uPred] = GetPred(Sol, n, d, N, np)          # Unpack the predicted trajectory
+
+        if (NumberPlots > 0) and (it >= IterationPlot) and (it <= IterationPlot + NumberPlots):
+            plt.plot(np.hstack(((Vertex[0])[:, 0], np.squeeze(Vertex[0])[0, 0])),
+                     np.hstack(((Vertex[0])[:, 1], np.squeeze(Vertex[0])[0, 1])), "-rs")
+            plt.plot(np.hstack(((Vertex[1])[:, 0], np.squeeze(Vertex[1])[0, 0])),
+                     np.hstack(((Vertex[1])[:, 1], np.squeeze(Vertex[1])[0, 1])), "-ks")
+            plt.plot(np.hstack(((Vertex[2])[:, 0], np.squeeze(Vertex[2])[0, 0])),
+                     np.hstack(((Vertex[2])[:, 1], np.squeeze(Vertex[2])[0, 1])), "-bs")
+
+            for i in range(0, it):
+                plt.plot(x[0, 0:Steps[i] + 1, i], x[1, 0:Steps[i] + 1, i], '-ro')
+
+            plt.plot(x[0, 0:t + 1, it], x[1, 0:t + 1, it], '-bs')
+            plt.plot(xPred[0, 0:N+1], xPred[1, 0:N+1], '-g*')
+
+            plt.xlim([-2.5, 2.5])
+            plt.ylim([-1, 4.5])
+
+            plt.show()
 
         # Apply the best input.
         # First check if the best input was feasible (Note that if the QP is not feasible --> cost set to 10000 --> If best problem not feasible all QP were not feasible)
@@ -201,7 +203,8 @@ def LMPC(A, B, x, u, it, SSit, np, M, M_sparse, PointSS, SSindex, FTOCP_LMPC, FT
             ReachedTerminalPoint = 1                      # If so, set the flag to 1: the simulation is completed
         else:
             # Compute in which regions of the candidate feasible solution belongs
-            SelectReg[0:N] = List_SelectReg[IndexSelectReg][1:N+1]            # Shift 0:N
+            for l in range(0,N):
+                SelectReg[l] = CurrentRegion(xPred[:,l+1], F_region, b_region, np, 1)            # Shift 0:N
             SelectReg[N] = CurrentRegion(x[:, IndexTermPoint+1, it-1-j_star], F_region, b_region, np, 1) # Compute for point N+1
 
             # # Now update the time index used for picking the first point in the trajectories of SS. This step is crucial
@@ -316,19 +319,24 @@ def FTOCP_LMPC_CVX(M, G, E, n, SS_sel, F, b, x0, np, Qfun_sel, qp, matrix, spmat
     return Solution, feasible, Cost
 
 def FTOCP_LMPC_CVX_Cost(M, G, E, n, SS_sel, F, b, x0, np, Qfun_sel, qp, matrix, spmatrix, i):
-    ind = range(E.size[0] - n, E.size[0])
-    TermPoint_sparse = spmatrix(SS_sel[:, i], ind, [0, 0])
-    q = matrix(0.0, (M.size[0], 1))
-
-    res_cons = qp(M, q,  F, matrix(b), G, E* matrix(x0)+TermPoint_sparse)
-
-    if res_cons['status'] == 'optimal':
-        feasible = 1
-        # IMPORTANT: Need to put a 2 because you have the 1/2 in front of the cost
-        Cost = 2*res_cons['primal objective'] + Qfun_sel[i]
-    else:
-        feasible = 0
+    if SS_sel[0,i] >=10000:
         Cost = 10000
+        feasible = 0
+    else:
+        ind = range(E[i].size[0] - n, E[i].size[0])
+        TermPoint_sparse = spmatrix(SS_sel[:, i], ind, [0, 0])
+
+        q = matrix(0.0, (M.size[0], 1))  # Vector associated with the linear cost, in this case zeros. NOTE: it must be dense
+
+        res_cons = qp(M, q,  F[i], matrix(b[i]), G[i], E[i]* matrix(x0)+TermPoint_sparse)
+
+        if res_cons['status'] == 'optimal':
+            feasible = 1
+            # IMPORTANT: Need to put a 2 because you have the 1/2 in front of the cost
+            Cost = 2*res_cons['primal objective'] + Qfun_sel[i]
+        else:
+            feasible = 0
+            Cost = 10000
 
     return Cost
 

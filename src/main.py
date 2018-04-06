@@ -61,6 +61,8 @@ PlotRegions(Vertex, plt, np, x_feasible)
 print "====================================== STARTING LMPC CODE ==============================================="
 
 # Setting the LMPC parameters
+NumberPlots = 0          # Show plot of predicted trajectory if NumberPlots > 0
+IterationPlot = 17       # If (NumberPlots == 1) and (IterationPlot =>it >= IterationPlot + NumberPlots) ---> Show plot
 N = 4                    # Controller's horizon
 CVX_LMPC  = 1            # Set to 1 for CVX <---------------- THIS MUST BE SET TO 1, CURRENTLY WORKING ONLY WITH CVX
 Parallel  = 0            # Set to 1 for multicore
@@ -144,7 +146,8 @@ for it in range(SSit, Iteration):
                                                 optimize, InitialGuess, GetPred, time, Parallel, p, partial,
                                                 CVX_LMPC, spmatrix, qp, matrix, SelectReg, BuildMatEqConst,
                                                 BuildMatEqConst_LMPC, BuildMatIneqConst, F_region, b_region,
-                                                CurrentRegion, SysEvolution, TotCost)
+                                                CurrentRegion, SysEvolution, TotCost, plt, Vertex,
+                                                Steps, NumberPlots, IterationPlot)
 
     # LMPC iteration is completed: Stop the timer
     endTimer = datetime.datetime.now()
