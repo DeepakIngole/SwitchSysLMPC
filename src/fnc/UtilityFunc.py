@@ -124,7 +124,7 @@ def BuildMatIneqConst(N, n, np, linalg, spmatrix, Fx, bx, SelectReg):
     # Let's start by computing the submatrix of F relates with the input
     rep_b = [Fu[0]] * (N)
     Futot = linalg.block_diag(*rep_b)
-    butot = np.repeat(bu[0], N)
+    butot = np.tile(np.squeeze(bu[0]), N)
 
     # Let's stack all together
     rFxtot, cFxtot = np.shape(Fxtot)
