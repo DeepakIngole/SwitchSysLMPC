@@ -1,7 +1,12 @@
 def LMPC(A, B, x, u, it, SSit, np, M_sparse, PointSS, SSindex, FTOCP_LMPC_CVX,
          n, d, N, linalg, GetPred, Parallel, p, partial, spmatrix, qp, matrix,
          SelectReg, BuildMatEqConst, BuildMatEqConst_LMPC, BuildMatIneqConst, F_region, b_region, CurrentRegion, SysEvolution, TotCost,
-         plt, Vertex, Steps, NumberPlots, IterationPlot, FTOCP_LMPC_CVX_Cost_Parallel, SwLogic):
+         plt, Vertex, Steps, NumberPlots, IterationPlot, FTOCP_LMPC_CVX_Cost_Parallel, SwLogic, A_true=None, B_true=None):
+    
+    if A_true is None: 
+        A_true = A
+    if B_true is None:
+        B_true = B
     # ==================================================================================================================
     # ========================== This functions run the it-th LMPC closed loop iteration ===============================
     # ==================================================================================================================
@@ -148,7 +153,7 @@ def LMPC(A, B, x, u, it, SSit, np, M_sparse, PointSS, SSindex, FTOCP_LMPC_CVX,
             break
 
         # Apply the input to the system
-        x[:, t + 1, it] = SysEvolution(x[:, t, it], u[:, t, it], F_region, b_region, np, CurrentRegion, A, B)
+        x[:, t + 1, it] = SysEvolution(x[:, t, it], u[:, t, it], F_region, b_region, np, CurrentRegion, A_true, B_true)
         # print "Solver Time ", time.clock() - start_time, "seconds"
 
         # Now check if the terminal point used as terminal constraint in the best QP is the terminal point of our task

@@ -34,14 +34,17 @@ def DefSystem(np):
                         [0.075, -1],
                         [-2, -1],
                         [-2,  1]]),
-              np.array([[2, 3],
+              np.array([[2, 4],
                         [2, 1],
                         [-2, 1],
-                        [-2, 3],
+                        [-2, 4],
                         [-2, 4]])]
 
+    Box_Points = [[[0.075, 2], [-1, 1]], 
+                   [[-2,0.75],[-1,1]], [[-2,2],[1,4]]]
 
-    return A, B, Q, R, Q_LMPC, R_LMPC, Vertex
+
+    return A, B, Q, R, Q_LMPC, R_LMPC, Vertex, Box_Points
 
 
 def DefineRegions(Vertex, Vrep, Hrep, np):
@@ -73,7 +76,7 @@ def CurrentRegion(x, F_region, b_region, np, Verbose):
             break
     if Region == np.inf:
         if Verbose == 1:
-            print "ERROR: ",x," Outside Feasible Region"
+            print("ERROR: ",x," Outside Feasible Region")
 
     return Region
 

@@ -16,7 +16,8 @@ from scipy import linalg
 from scipy import optimize
 import matplotlib.pyplot as plt
 from cvxopt import spmatrix, matrix,solvers
-from polyhedron import Vrep, Hrep
+#from polyhedron import Vrep, Hrep
+import polytope
 
 solvers.options['show_progress'] = False      # Turn off CVX messages
 
@@ -31,16 +32,28 @@ solvers.options['show_progress'] = False      # Turn off CVX messages
 # Scipy solver is not stable, check the branch Test_scipy_CVX_Solver for and example where it fails
 
 # Initialization
-Time = 40                            # Number of simulation's time steps for first feasible trajectory
+Time = 50                            # Number of simulation's time steps for first feasible trajectory
 n = 2                                # State Dimensions
 d = 1                                # Input Dimensions
 x_feasible = np.zeros((n,Time+1))    # Initialize the closed loop trajectory
 u_feasible = np.zeros((d,Time))      # Initialize the closed loop input
 
 # Define System Dynamics and Cost Function
-[A, B, Q, R, Q_LMPC, R_LMPC, Vertex] = DefSystem(np)
+[A, B, Q, R, Q_LMPC, R_LMPC, Vertex, Box_Points] = DefSystem(np)
+
+np.random.seed(4584005)
+A_true = []; B_true = []
+for a in A:
+    A_true.append(a + 0.2 * (np.random.uniform(size=a.shape)-1))
+for b in B: 
+    B_true.append(b + 0.2 * (np.random.uniform(size=b.shape)-1))
+
 # Compute the matrices which identify the state space regions (i.e. if in x in region i --> F_region[i]*x <= b_region[i]
-F_region, b_region = DefineRegions(Vertex, Vrep, Hrep, np)
+#F_region, b_region = DefineRegions(Vertex, Vrep, Hrep, np)
+F_region = []; b_region = [];
+for box in Box_Points:
+    p = polytope.box2poly(box) #Polytope(vertices=Vertex)
+    F_region.append(p.A); b_region.append(p.b)
 
 # Set initial Conditions in Region 2
 x_feasible[:,0] = np.array([-1, 2.5])
@@ -52,15 +65,14 @@ K = np.array([0.4221,  1.2439]) # Pick feedback gain for the first feasible traj
 # Time loop: apply the above feedback gain
 for i in range(0, Time):
     u_feasible[:,i] = -0*np.dot(K, x_feasible[:,i])
-    x_feasible[:,i+1] = SysEvolution(x_feasible[:,i], u_feasible[:,i], F_region, b_region, np, CurrentRegion, A, B)
+    x_feasible[:,i+1] = SysEvolution(x_feasible[:,i], u_feasible[:,i], F_region, b_region, np, CurrentRegion, A_true, B_true)
 
 PlotRegions(Vertex, plt, np, x_feasible)
 
 # ======================================================================================================================
 # ================== Now that we have the first feasible solution we are ready for the LMPC ============================
 # ======================================================================================================================1
-print "====================================== STARTING LMPC CODE ==============================================="
-
+print("====================================== STARTING LMPC CODE ===============================================")
 # Setting the LMPC parameters
 NumberPlots = 0          # Show plot of predicted trajectory if NumberPlots > 0
 IterationPlot = 17       # If (NumberPlots == 1) and (IterationPlot =>it >= IterationPlot + NumberPlots) ---> Show plot
@@ -88,7 +100,7 @@ for i in range(0, NumRegions):
 # Variable initialization
 x            = 10000*np.ones((n, TimeLMPC+1, Iteration))  # Closed loop trajectory
 u            = 10000*np.ones((d, TimeLMPC+0, Iteration))  # Input associated with closed loop trajectory
-Steps        = 10000*np.ones((Iteration))                 # This vector collests the actual time at which each iteratin is completed (Remember: it was needed to pre-allocate memory)
+Steps        = 10000*np.ones((Iteration), dtype=int)                 # This vector collests the actual time at which each iteratin is completed (Remember: it was needed to pre-allocate memory)
 IndexVec     = 10000*np.ones(TimeLMPC+1)                  # This vector will be used to assign the data to the sample safe set
 TotCost      = 10000*np.ones((TimeLMPC+1, Iteration))     # This vector will be used to assign the cost to the Qfunction
 SelectReg    = 10000*np.ones(N+1)             # This vector collects the region to which the candidate feasible solution belongs to
@@ -147,7 +159,8 @@ for it in range(SSit, Iteration):
                                                 spmatrix, qp, matrix, SelectReg, BuildMatEqConst,
                                                 BuildMatEqConst_LMPC, BuildMatIneqConst, F_region, b_region,
                                                 CurrentRegion, SysEvolution, TotCost, plt, Vertex,
-                                                Steps, NumberPlots, IterationPlot, FTOCP_LMPC_CVX_Cost_Parallel, SwLogic)
+                                                Steps, NumberPlots, IterationPlot, FTOCP_LMPC_CVX_Cost_Parallel, 
+                                                SwLogic, A_true=A_true, B_true=B_true)
 
     # LMPC iteration is completed: Stop the timer
     endTimer = datetime.datetime.now()
@@ -173,11 +186,12 @@ for it in range(SSit, Iteration):
     print("Learning Iteration: %d, Time Steps %.1f, Iteration Cost: %.5f, Cost Improvement: %.7f, Iteration time: %.3fs, Avarage MIQP solver time: %.3fs"
           %(it, Steps[it], TotCost[0, it], (TotCost[0, it-1] - TotCost[0, it]), ( (deltaTimer.total_seconds() )), (((deltaTimer.total_seconds() )) / Steps[it])) )
     # Run few checks
-    if (TotCost[0, it-1] - TotCost[0, it]) < -10**(-10):  # Sanity check: Make sure that the cost is decreasing at each iteration
-        print("ERROR: The cost is increasing, check the code",TotCost[0, it-1], TotCost[0, it], it)
-        print("Iteration cost along the iterations: ", TotCost[0, 0:it+1])
-        break
-    elif (TotCost[0, it-1] - TotCost[0, it]) < toll:      # Check if the LMPC has converged within the used-defined tollerance
+    # if (TotCost[0, it-1] - TotCost[0, it]) < -10**(-10):  # Sanity check: Make sure that the cost is decreasing at each iteration
+    #     print("ERROR: The cost is increasing, check the code",TotCost[0, it-1], TotCost[0, it], it)
+    #     print("Iteration cost along the iterations: ", TotCost[0, 0:it+1])
+    #     break
+    #el
+    if (TotCost[0, it-1] - TotCost[0, it]) < toll:      # Check if the LMPC has converged within the used-defined tollerance
         print("The LMPC has converged at iteration %d, The Optimal Cost is: %.5f" %(it, TotCost[0, it]))
         break
 
@@ -192,10 +206,10 @@ list_start = []
 for i in range(0, int(Steps[0])+1):
     list_start.append(CurrentRegion(x[:,i,0], F_region, b_region, np, 1))
 
-print "Steps in Region 0, Firs Feasible Solution: ",list_start.count(0), " Steady State: ", list_it.count(0)
-print "Steps in Region 1, Firs Feasible Solution: ",list_start.count(1), " Steady State: ", list_it.count(1)
-print "Steps in Region 1, Firs Feasible Solution: ",list_start.count(2), " Steady State: ", list_it.count(2)
-print "Evolution First Feasible trajecotry and Steady state \n", list_start, "\n", list_it
+print("Steps in Region 0, Firs Feasible Solution: ",list_start.count(0), " Steady State: ", list_it.count(0))
+print("Steps in Region 1, Firs Feasible Solution: ",list_start.count(1), " Steady State: ", list_it.count(1))
+print("Steps in Region 1, Firs Feasible Solution: ",list_start.count(2), " Steady State: ", list_it.count(2))
+print("Evolution First Feasible trajecotry and Steady state \n", list_start, "\n", list_it)
 # print x[:,:,it]
 
 # ======================================================================================================================
