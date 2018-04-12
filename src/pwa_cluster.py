@@ -1,5 +1,6 @@
 import numpy as np
 import scipy.linalg as la
+import rls
 
 class ClusterPWA:
     """stores clustered points and associate affine models
@@ -12,7 +13,7 @@ class ClusterPWA:
         (optional) KTK: kernel map conjugate transposed with itself
     """
 
-    def __init__(self, zs, ys, initialization, z_cutoff=None):
+    def __init__(self, zs, ys, initialization, init_type = None, z_cutoff=None):
         """object initialization
 
         Args:
@@ -32,7 +33,15 @@ class ClusterPWA:
         self.Nd = zs.shape[0]
         self.cov_e = np.eye(self.dimy) # to do: change?
 
-        if isinstance(initialization, int):
+        if init_type is None:
+            if isinstance(initialization, int):
+                init_type = 'num_clusters'
+            elif len(initialization) == 2:
+                init_type = 'centroids'
+            else:
+                init_type = 'labels'
+
+        if init_type == 'num_clusters':
             self.Nc = initialization
             self.thetas = np.zeros( np.hstack([self.Nc, self.dimz+1, self.dimy]))
             self.centroids = np.random.uniform(size=np.hstack([self.Nc, self.z_cutoff]))
@@ -42,15 +51,21 @@ class ClusterPWA:
                 self.centroids[:,i] = spread[i]*self.centroids[:,i] + offset[i]
             self.cov_c = [np.eye(self.z_cutoff) for i in range(self.centroids.shape[0])]
             self.cluster_labels = np.zeros(self.Nd)
-        elif len(initialization) == 2:
+        elif init_type == 'centroids':
             self.centroids, self.thetas = initialization
             self.Nc = self.centroids.shape[0]
             self.cluster_labels = np.zeros(self.Nd)
             self.cov_c = [np.eye(self.z_cutoff) for i in range(self.Nc)]
-        else:
+        elif init_type == 'labels':
             self.cluster_labels = initialization
             self.Nc = np.unique(self.cluster_labels).size
             self.centroids, self.thetas, self.cov_c = self.get_model_from_labels()
+        elif init_type == 'labels_models':
+            self.cluster_labels = initialization[0]
+            self.thetas = initialization[1]
+            self.Nc = np.unique(self.cluster_labels).size
+            self.thetas = self.get_updated_thetas()
+            self.centroids, _, self.cov_c = self.get_model_from_labels()
 
     def fit_clusters(self, verbose=False):
         """iteratively fits points to clusters and affine models
@@ -136,6 +151,23 @@ class ClusterPWA:
             thetas[i] = ls_res[0] # affine fit x and y
             assert len(cov_c[i].shape) == 2, cov_c[i].shape
         return centroids, thetas, cov_c
+
+    def get_updated_thetas(self):
+        """
+        Uses recursive least squares to update theta based on the data points in the cluster
+        """
+        thetas = np.zeros( np.hstack([self.Nc, self.dimz+1, self.dimy]))
+        
+        for i in range(self.Nc):
+            est = rls.Estimator(self.thetas[i], np.eye(self.dimz+1))
+
+            points = [self.zs[j] for j in range(self.Nd) if self.cluster_labels[j] == i]
+            points_y = [self.ys[j] for j in range(self.Nd) if self.cluster_labels[j] == i]
+            for point, y in zip(points, points_y):
+                est.update(np.hstack([point,[1]]), y)
+            thetas[i] = est.theta
+        return thetas
+
    
 # (9,) 509 (509, 1) (7,) 509
 # (9,) 693 (693, 1) (7,) 693

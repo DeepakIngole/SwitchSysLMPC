@@ -47,9 +47,16 @@ u_feasible = np.zeros((d,Time))      # Initialize the closed loop input
 np.random.seed(4584005)
 A_true = []; B_true = []
 for a in A:
-    A_true.append(a + 0.2 * (np.random.uniform(size=a.shape)-1))
+    mask = (a != 0)
+    A_true.append(a + 0.1 * (np.random.uniform(size=a.shape)-1) * mask)
 for b in B: 
-    B_true.append(b + 0.2 * (np.random.uniform(size=b.shape)-1))
+    mask = (b != 0)
+    B_true.append(b + 0.1 * (np.random.uniform(size=b.shape)-1) * mask)
+
+thetas_true = []
+for a,b in zip(A_true,B_true):
+    thetas_true.append(np.vstack([a.T,b.T,np.zeros([1,a.shape[1]])]))
+thetas_true = np.array(thetas_true)
 
 # Compute the matrices which identify the state space regions (i.e. if in x in region i --> F_region[i]*x <= b_region[i]
 #F_region, b_region = DefineRegions(Vertex, Vrep, Hrep, np)
@@ -77,10 +84,15 @@ for i in range(0, Time):
     zs.append(np.hstack([x_feasible[:,i], u_feasible[:,i]]))
     ys.append(x_feasible[:,i+1]) 
 
-pwa_model = pwac.ClusterPWA(np.array(zs), np.array(ys), np.array(cluster_labels))
-print(A_true)
-print(B_true)
-print(pwa_model.thetas) # can't fit B because lack of excitation
+thetas = []
+for a,b in zip(A,B):
+    thetas.append(np.vstack([a.T,b.T,np.zeros([1,a.shape[1]])]))
+thetas = np.array(thetas)
+print(np.linalg.norm(thetas-thetas_true)) # can't fit B because lack of excitation
+
+#pwa_model = pwac.ClusterPWA(np.array(zs), np.array(ys), np.array(cluster_labels))
+pwa_model = pwac.ClusterPWA(np.array(zs), np.array(ys), [np.array(cluster_labels), np.array(thetas)], init_type='labels_models')
+print(np.linalg.norm(pwa_model.thetas-thetas_true)) # can't fit B because lack of excitation
 
 
 
@@ -205,10 +217,16 @@ for it in range(SSit, Iteration):
         cluster_labels.append(CurrentRegion(x[:,i,it], F_region, b_region, np, 0))
         zs.append(np.hstack([x[:,i, it], u[:,i, it]]))
         ys.append(x[:,i+1, it]) 
-    pwa_model = pwac.ClusterPWA(np.array(zs), np.array(ys), np.array(cluster_labels))
-    print(A_true)
-    print(B_true)
-    print(pwa_model.thetas) 
+
+
+    thetas = []
+    for a,b in zip(A,B):
+        thetas.append(np.vstack([a.T,b.T,np.zeros([1,a.shape[1]])]))
+
+    pwa_model = pwac.ClusterPWA(np.array(zs), np.array(ys), [np.array(cluster_labels), np.array(thetas)], init_type='labels_models')
+
+    print(np.linalg.norm(pwa_model.thetas-thetas_true)) # can't fit B because lack of excitation
+
 
     # Print the results from the it-th iteration
     print("Learning Iteration: %d, Time Steps %.1f, Iteration Cost: %.5f, Cost Improvement: %.7f, Iteration time: %.3fs, Avarage MIQP solver time: %.3fs"
