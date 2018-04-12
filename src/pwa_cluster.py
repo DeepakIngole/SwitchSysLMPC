@@ -49,7 +49,7 @@ class ClusterPWA:
             self.cov_c = [np.eye(self.z_cutoff) for i in range(self.Nc)]
         else:
             self.cluster_labels = initialization
-            self.Nc = np.unqiue(self.cluster_labels).size
+            self.Nc = np.unique(self.cluster_labels).size
             self.centroids, self.thetas, self.cov_c = self.get_model_from_labels()
 
     def fit_clusters(self, verbose=False):

@@ -5,10 +5,13 @@ from UtilityFunc import DefSystem, DefineRegions, PlotRegions, CurrentRegion, Sy
 from LMPCfunc import ComputeCost
 from LMPC import LMPC, BuildMatCostLMPC, FTOCP_LMPC, FTOCP_LMPC_Sol, BuildMatEqConst_LMPC, \
     FTOCP_LMPC_CVX, FTOCP_LMPC_CVX_Cost, FTOCP_LMPC_CVX_Cost_Parallel
+import pwa_cluster as pwac
+
 from pathos.multiprocessing import ProcessingPool as Pool
 from functools import partial
 import datetime
 from cvxopt.solvers import qp
+
 
 import numpy as np
 import time
@@ -66,6 +69,20 @@ K = np.array([0.4221,  1.2439]) # Pick feedback gain for the first feasible traj
 for i in range(0, Time):
     u_feasible[:,i] = -0*np.dot(K, x_feasible[:,i])
     x_feasible[:,i+1] = SysEvolution(x_feasible[:,i], u_feasible[:,i], F_region, b_region, np, CurrentRegion, A_true, B_true)
+
+# Use data to fit linear models
+zs = []; ys = []; cluster_labels = [];
+for i in range(0, Time):
+    cluster_labels.append(CurrentRegion(x_feasible[:,i], F_region, b_region, np, 0))
+    zs.append(np.hstack([x_feasible[:,i], u_feasible[:,i]]))
+    ys.append(x_feasible[:,i+1]) 
+
+pwa_model = pwac.ClusterPWA(np.array(zs), np.array(ys), np.array(cluster_labels))
+print(A_true)
+print(B_true)
+print(pwa_model.thetas) # can't fit B because lack of excitation
+
+
 
 PlotRegions(Vertex, plt, np, x_feasible)
 
@@ -181,6 +198,17 @@ for it in range(SSit, Iteration):
             SS_list[r][0:n,0:IndexVec[IndexVec == r].size,it] = x[: , IndexVec==r, it]       # Now initialize the Sampled Safe set (SS)
             SS_list[r][n,0:IndexVec[IndexVec == r].size,it]   = np.where(IndexVec==r)[0]     # Now initialize the Sampled Safe set (SS)
             Qfun_list[r][0:IndexVec[IndexVec == r].size,it]   = TotCost[IndexVec==r, it]
+
+    # STEP4: Update models based on collected data
+    # Use data to fit linear models
+    for i in range(0, Steps[it]):
+        cluster_labels.append(CurrentRegion(x[:,i,it], F_region, b_region, np, 0))
+        zs.append(np.hstack([x[:,i, it], u[:,i, it]]))
+        ys.append(x[:,i+1, it]) 
+    pwa_model = pwac.ClusterPWA(np.array(zs), np.array(ys), np.array(cluster_labels))
+    print(A_true)
+    print(B_true)
+    print(pwa_model.thetas) 
 
     # Print the results from the it-th iteration
     print("Learning Iteration: %d, Time Steps %.1f, Iteration Cost: %.5f, Cost Improvement: %.7f, Iteration time: %.3fs, Avarage MIQP solver time: %.3fs"
