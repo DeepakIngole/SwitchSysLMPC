@@ -44,14 +44,14 @@ u_feasible = np.zeros((d,Time))      # Initialize the closed loop input
 # Define System Dynamics and Cost Function
 [A, B, Q, R, Q_LMPC, R_LMPC, Vertex, Box_Points] = DefSystem(np)
 
-np.random.seed(4584005)
+np.random.seed(48480085)
 A_true = []; B_true = []
 for a in A:
     mask = (a != 0)
     A_true.append(a + 0.1 * (np.random.uniform(size=a.shape)-1) * mask)
 for b in B: 
     mask = (b != 0)
-    B_true.append(b + 0.1 * (np.random.uniform(size=b.shape)-1) * mask)
+    B_true.append(b + 0.0 * (np.random.uniform(size=b.shape)-1) * mask)
 
 thetas_true = []
 for a,b in zip(A_true,B_true):
@@ -92,8 +92,13 @@ print(np.linalg.norm(thetas-thetas_true)) # can't fit B because lack of excitati
 
 #pwa_model = pwac.ClusterPWA(np.array(zs), np.array(ys), np.array(cluster_labels))
 pwa_model = pwac.ClusterPWA(np.array(zs), np.array(ys), [np.array(cluster_labels), np.array(thetas)], init_type='labels_models')
-print(np.linalg.norm(pwa_model.thetas-thetas_true)) # can't fit B because lack of excitation
-
+print('estimation error:',np.linalg.norm(pwa_model.thetas-thetas_true)) # can't fit B because lack of excitation
+A_est = []; B_est = [];
+for theta in pwa_model.thetas:
+    A_est.append(theta[0:n,:].T)
+    B_est.append(theta[n:n+d,:].T)
+A = A_est
+B = B_est
 
 
 PlotRegions(Vertex, plt, np, x_feasible)
@@ -222,11 +227,14 @@ for it in range(SSit, Iteration):
     thetas = []
     for a,b in zip(A,B):
         thetas.append(np.vstack([a.T,b.T,np.zeros([1,a.shape[1]])]))
-
     pwa_model = pwac.ClusterPWA(np.array(zs), np.array(ys), [np.array(cluster_labels), np.array(thetas)], init_type='labels_models')
-
-    print(np.linalg.norm(pwa_model.thetas-thetas_true)) # can't fit B because lack of excitation
-
+    print("estimation error:", np.linalg.norm(pwa_model.thetas-thetas_true)) # can't fit B because lack of excitation
+    A_est = []; B_est = [];
+    for theta in pwa_model.thetas:
+        A_est.append(theta[0:n,:].T)
+        B_est.append(theta[n:n+d,:].T)
+    A = A_est
+    B = B_est
 
     # Print the results from the it-th iteration
     print("Learning Iteration: %d, Time Steps %.1f, Iteration Cost: %.5f, Cost Improvement: %.7f, Iteration time: %.3fs, Avarage MIQP solver time: %.3fs"

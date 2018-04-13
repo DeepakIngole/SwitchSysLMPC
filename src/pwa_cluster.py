@@ -63,7 +63,7 @@ class ClusterPWA:
         elif init_type == 'labels_models':
             self.cluster_labels = initialization[0]
             self.thetas = initialization[1]
-            self.Nc = np.unique(self.cluster_labels).size
+            self.Nc = len(self.thetas) #np.unique(self.cluster_labels).size
             self.thetas = self.get_updated_thetas()
             self.centroids, _, self.cov_c = self.get_model_from_labels()
 
