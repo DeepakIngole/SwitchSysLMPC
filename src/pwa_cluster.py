@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.linalg as la
 import rls
+import cvxpy as cvx
 
 class ClusterPWA:
     """stores clustered points and associate affine models
@@ -79,6 +80,16 @@ class ClusterPWA:
             if verbose:
                 print(c_error)
         print("done")
+
+    def determine_polytopic_regions(self, verbose=False):
+        ws = self.get_polytopic_regions(verbose)
+        if ws[0] is not None:
+            self.region_fns = np.array(ws)
+        
+        for i in range(len(self.zs)):
+            dot_pdt = [w.transpose().dot(np.hstack([self.zs[i,0:self.z_cutoff], [1]])) for w in self.region_fns]
+            self.cluster_labels[i] = np.argmax(dot_pdt)
+        self.centroids, self.thetas, self.cov_c = self.get_model_from_labels()
 
     def update_clusters(self, verbose=False):
         """updates cluster assignment, centroids, and affine models
@@ -168,14 +179,60 @@ class ClusterPWA:
             thetas[i] = est.theta
         return thetas
 
-   
-# (9,) 509 (509, 1) (7,) 509
-# (9,) 693 (693, 1) (7,) 693
-# (9,) 17 (17, 1) (7,) 17
-# (9,) 335 (335, 1) (7,) 335
-# (9,) 350 (350, 1) (7,) 350
-# (9,) 138 (138, 1) (7,) 138
-# (9,) 153 (153, 1) (7,) 153
-# (9,) 228 (228, 1) (7,) 228
-# (9,) 99 (99, 1) (7,) 99
+    def get_polytopic_regions(self, verbose=False):
+        prob, ws = cvx_cluster_problem(self.zs[:,0:self.z_cutoff], self.cluster_labels)
+        prob.solve(verbose=verbose)
+        assert prob.status == 'optimal', "ERROR: nonoptimal polytope regions"
+        return [w.value for w in ws]
+
+def cvx_cluster_problem(zs, labels):
+    s = np.unique(labels).size
+    
+    Ms = []
+    ms = []
+    ws = []
+    for i in range(s):
+        selected_z = zs[np.where(labels == i)]
+        num_selected = selected_z.shape[0]
+        M = np.hstack([selected_z,np.ones([num_selected,1])])
+        Ms.append(M); ms.append(num_selected)
+        ws.append(cvx.Variable(zs[0].size + 1,1))
         
+    cost = 0
+    constr = []
+    for i in range(s):
+        for j in range(s):
+            if i == j: continue;
+            expr = Ms[i] * (ws[j] - ws[i]) + np.ones([ms[i],1])
+            cost = cost + np.ones(ms[i]) * ( cvx.pos(expr) ) / ms[i]
+            
+    return cvx.Problem(cvx.Minimize(cost)), ws
+
+def getRegionMatrices(region_fns):
+    F_region = []; b_region = []
+    Nr = len(region_fns)
+    dim = region_fns[0].size
+    for i in range(Nr):
+        F = np.zeros([Nr-1, dim-1])
+        b = np.zeros(Nr-1)
+        for j in range(Nr):
+            if j < i:
+                F[j,:] = (region_fns[j,:-1] - region_fns[i,:-1]).T
+                b[j] = region_fns[i,-1] - region_fns[j,-1]
+            if j > i:
+                F[j-1,:] = (region_fns[j,:-1] - region_fns[i,:-1]).T
+                b[j-1] = region_fns[i,-1] - region_fns[j,-1]
+        F_region.append(F); b_region.append(b)
+    return F_region, b_region
+
+def check_equivalence(region_fns, F_region, b_region, x):
+    dot_pdt = [w.T.dot(np.hstack([x, [1]])) for w in region_fns]
+    region_label = np.argmax(dot_pdt)
+    
+    matrix_label = []
+    for i in range(len(F_region)):
+        if np.all(F_region[i].dot(x) <= b_region[i]):
+            matrix_label.append(i)
+    print(region_label, matrix_label)
+    
+
