@@ -37,14 +37,17 @@ def DefSystem(np):
               np.array([[2, 4],
                         [2, 1],
                         [-2, 1],
-                        [-2, 4],
                         [-2, 4]])]
 
     Box_Points = [[[0.075, 2], [-1, 1]], 
-                   [[-2,0.75],[-1,1]], [[-2,2],[1,4]]]
+                   [[-2,0.075],[-1,1]], [[-2,2],[1,4]]]
+
+    BOX_ERROR = 0.5
+    Box_Points_Perturbed = [[[0.075+BOX_ERROR, 2], [-1, 1+BOX_ERROR]], 
+                   [[-2,0.075+BOX_ERROR],[-1,1+BOX_ERROR]], [[-2,2],[1+BOX_ERROR,4]]]
 
 
-    return A, B, Q, R, Q_LMPC, R_LMPC, Vertex, Box_Points
+    return A, B, Q, R, Q_LMPC, R_LMPC, Vertex, Box_Points, Box_Points_Perturbed
 
 
 def DefineRegions(Vertex, Vrep, Hrep, np):

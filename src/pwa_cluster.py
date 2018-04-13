@@ -33,6 +33,7 @@ class ClusterPWA:
             self.z_cutoff = z_cutoff
         self.Nd = zs.shape[0]
         self.cov_e = np.eye(self.dimy) # to do: change?
+        self.update_thetas = True
 
         if init_type is None:
             if isinstance(initialization, int):
@@ -67,6 +68,15 @@ class ClusterPWA:
             self.Nc = len(self.thetas) #np.unique(self.cluster_labels).size
             self.thetas = self.get_updated_thetas()
             self.centroids, _, self.cov_c = self.get_model_from_labels()
+        elif init_type == 'labels_models_noupdate':
+            self.cluster_labels = initialization[0]
+            self.thetas = initialization[1]
+            self.Nc = len(self.thetas) #np.unique(self.cluster_labels).size
+            self.update_thetas == False
+            self.centroids, _, self.cov_c = self.get_model_from_labels()
+            self.fit_clusters()
+            self.determine_polytopic_regions()
+            #self.centroids, _, self.cov_c = self.get_model_from_labels()
 
     def fit_clusters(self, verbose=False):
         """iteratively fits points to clusters and affine models
@@ -89,7 +99,10 @@ class ClusterPWA:
         for i in range(len(self.zs)):
             dot_pdt = [w.transpose().dot(np.hstack([self.zs[i,0:self.z_cutoff], [1]])) for w in self.region_fns]
             self.cluster_labels[i] = np.argmax(dot_pdt)
-        self.centroids, self.thetas, self.cov_c = self.get_model_from_labels()
+        if self.update_thetas:
+            self.centroids, self.thetas, self.cov_c = self.get_model_from_labels()
+        else:
+            self.centroids, _, self.cov_c = self.get_model_from_labels()
 
     def update_clusters(self, verbose=False):
         """updates cluster assignment, centroids, and affine models
@@ -109,8 +122,11 @@ class ClusterPWA:
         # Storing the old centroid values
         centroids_old = np.copy(self.centroids)
         # updating model based on new clusters
-        print("updating models")
-        self.centroids, self.thetas, self.cov_c = self.get_model_from_labels()
+        if verbose: print("updating models")
+        if self.update_thetas:
+            self.centroids, self.thetas, self.cov_c = self.get_model_from_labels()
+        else:
+            self.centroids, _, self.cov_c = self.get_model_from_labels()        
         c_error = np.linalg.norm(self.centroids-centroids_old, ord='fro')
         return c_error
 
@@ -122,11 +138,15 @@ class ClusterPWA:
         Returns:
             an array of model quality for each cluster
         """
-        scaling_c = [la.pinv(la.sqrtm(self.cov_c[i])) for i in range(self.Nc)]
+        #scaling_c = [la.pinv(la.sqrtm(self.cov_c[i])) for i in range(self.Nc)]
+        scaling_c = [np.eye(self.z_cutoff) for i in range(self.Nc)]
         scaling_e = la.inv(la.sqrtm(self.cov_e))
         
         # is distz the WRONG measure of locality for PWA?
-        distz = lambda idx: np.linalg.norm(scaling_c[idx].dot(z[0:self.z_cutoff]-self.centroids[idx]),2)
+        # distz = lambda idx: np.linalg.norm(scaling_c[idx].dot(z[0:self.z_cutoff]-self.centroids[idx]),2)
+        def distz(idx): 
+            # print(scaling_c[idx].shape, z[0:self.z_cutoff].shape, self.centroids[idx].shape)
+            return np.linalg.norm(scaling_c[idx].dot(z[0:self.z_cutoff]-self.centroids[idx]),2)
         disty = lambda idx: np.linalg.norm(scaling_e.dot(y-self.thetas[idx].transpose().dot(np.hstack([z, 1]))),2)
         
         zdists = [distz(i) for i in range(self.Nc)]
@@ -212,6 +232,7 @@ def getRegionMatrices(region_fns):
     F_region = []; b_region = []
     Nr = len(region_fns)
     dim = region_fns[0].size
+    print(Nr, dim)
     for i in range(Nr):
         F = np.zeros([Nr-1, dim-1])
         b = np.zeros(Nr-1)

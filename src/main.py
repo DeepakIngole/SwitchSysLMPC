@@ -41,17 +41,22 @@ d = 1                                # Input Dimensions
 x_feasible = np.zeros((n,Time+1))    # Initialize the closed loop trajectory
 u_feasible = np.zeros((d,Time))      # Initialize the closed loop input
 
+# model mismatch parameters
+A_ERROR = 0
+B_ERROR = 0.0
+FIT_REGIONS = False
+
 # Define System Dynamics and Cost Function
-[A, B, Q, R, Q_LMPC, R_LMPC, Vertex, Box_Points] = DefSystem(np)
+[A, B, Q, R, Q_LMPC, R_LMPC, Vertex, Box_Points, Box_Points_Perturbed] = DefSystem(np)
 
 np.random.seed(48480085)
 A_true = []; B_true = []
 for a in A:
     mask = (a != 0)
-    A_true.append(a + 0.1 * (np.random.uniform(size=a.shape)-1) * mask)
+    A_true.append(a + A_ERROR * (np.random.uniform(size=a.shape)-1) * mask)
 for b in B: 
     mask = (b != 0)
-    B_true.append(b + 0.0 * (np.random.uniform(size=b.shape)-1) * mask)
+    B_true.append(b + B_ERROR * (np.random.uniform(size=b.shape)-1) * mask)
 
 thetas_true = []
 for a,b in zip(A_true,B_true):
@@ -60,10 +65,23 @@ thetas_true = np.array(thetas_true)
 
 # Compute the matrices which identify the state space regions (i.e. if in x in region i --> F_region[i]*x <= b_region[i]
 #F_region, b_region = DefineRegions(Vertex, Vrep, Hrep, np)
+
+Vertex = []
 F_region = []; b_region = [];
 for box in Box_Points:
     p = polytope.box2poly(box) #Polytope(vertices=Vertex)
+    Vertex.append(polytope.extreme(p))
+    print(polytope.extreme(p))
     F_region.append(p.A); b_region.append(p.b)
+
+F_region_perturbed = []; b_region_perturbed = [];
+Vertex_perturbed = []
+for box in Box_Points_Perturbed:
+    p = polytope.box2poly(box) #Polytope(vertices=Vertex)
+    Vertex_perturbed.append(polytope.extreme(p))
+    F_region_perturbed.append(p.A); b_region_perturbed.append(p.b)
+
+Vertex_perturbed0 = Vertex_perturbed
 
 # Set initial Conditions in Region 2
 x_feasible[:,0] = np.array([-1, 2.5])
@@ -79,26 +97,64 @@ for i in range(0, Time):
 
 # Use data to fit linear models
 zs = []; ys = []; cluster_labels = [];
-for i in range(0, Time):
-    cluster_labels.append(CurrentRegion(x_feasible[:,i], F_region, b_region, np, 0))
-    zs.append(np.hstack([x_feasible[:,i], u_feasible[:,i]]))
-    ys.append(x_feasible[:,i+1]) 
+theta_estimation = []
+if A_ERROR > 0 or B_ERROR > 0:
+    for i in range(0, Time):
+        cluster_labels.append(CurrentRegion(x_feasible[:,i], F_region, b_region, np, 0))
+        zs.append(np.hstack([x_feasible[:,i], u_feasible[:,i]]))
+        ys.append(x_feasible[:,i+1]) 
 
-thetas = []
-for a,b in zip(A,B):
-    thetas.append(np.vstack([a.T,b.T,np.zeros([1,a.shape[1]])]))
-thetas = np.array(thetas)
-print(np.linalg.norm(thetas-thetas_true)) # can't fit B because lack of excitation
+    thetas = []
+    for a,b in zip(A,B):
+        thetas.append(np.vstack([a.T,b.T,np.zeros([1,a.shape[1]])]))
+    thetas = np.array(thetas)
+    print(np.linalg.norm(thetas-thetas_true)) # can't fit B because lack of excitation
 
-#pwa_model = pwac.ClusterPWA(np.array(zs), np.array(ys), np.array(cluster_labels))
-pwa_model = pwac.ClusterPWA(np.array(zs), np.array(ys), [np.array(cluster_labels), np.array(thetas)], init_type='labels_models')
-print('estimation error:',np.linalg.norm(pwa_model.thetas-thetas_true)) # can't fit B because lack of excitation
-A_est = []; B_est = [];
-for theta in pwa_model.thetas:
-    A_est.append(theta[0:n,:].T)
-    B_est.append(theta[n:n+d,:].T)
-A = A_est
-B = B_est
+    #pwa_model = pwac.ClusterPWA(np.array(zs), np.array(ys), np.array(cluster_labels))
+    pwa_model = pwac.ClusterPWA(np.array(zs), np.array(ys), [np.array(cluster_labels), np.array(thetas)], 
+                                init_type='labels_models')
+    print('estimation error:',np.linalg.norm(pwa_model.thetas-thetas_true)) # can't fit B because lack of excitation
+    theta_estimation.append(np.linalg.norm(pwa_model.thetas-thetas_true))
+    print(theta_estimation)
+    A_est = []; B_est = [];
+    for theta in pwa_model.thetas:
+        A_est.append(theta[0:n,:].T)
+        B_est.append(theta[n:n+d,:].T)
+    A = A_est
+    B = B_est
+elif FIT_REGIONS:
+    for i in range(0, Time):
+        cluster_labels.append(CurrentRegion(x_feasible[:,i], F_region_perturbed, b_region_perturbed, np, 0))
+        zs.append(np.hstack([x_feasible[:,i], u_feasible[:,i]]))
+        ys.append(x_feasible[:,i+1]) 
+    thetas = []
+    for a,b in zip(A,B):
+        thetas.append(np.vstack([a.T,b.T,np.zeros([1,a.shape[1]])]))
+    thetas = np.array(thetas)
+
+    pwa_model = pwac.ClusterPWA(np.array(zs), np.array(ys), [np.array(cluster_labels), np.array(thetas)], 
+                                init_type='labels_models_noupdate', z_cutoff=2)
+    F_region_perturbed, b_region_perturbed = pwac.getRegionMatrices(pwa_model.region_fns)
+
+    for F,b in zip(F_region_perturbed, b_region_perturbed):
+        p = polytope.Polytope(A=F, b=b) #Polytope(vertices=Vertex)
+        Vertex_perturbed.append(polytope.extreme(p))
+
+    plt.figure()
+    for Vertex_plot in [Vertex_perturbed, Vertex]:
+        
+        plt.plot(np.hstack(((Vertex_plot[0])[:, 0], np.squeeze(Vertex_plot[0])[0, 0])),
+                     np.hstack(((Vertex_plot[0])[:, 1], np.squeeze(Vertex_plot[0])[0, 1])), "-rs")
+        plt.plot(np.hstack(((Vertex_plot[1])[:, 0], np.squeeze(Vertex_plot[1])[0, 0])),
+                 np.hstack(((Vertex_plot[1])[:, 1], np.squeeze(Vertex_plot[1])[0, 1])), "-ks")
+        plt.plot(np.hstack(((Vertex_plot[2])[:, 0], np.squeeze(Vertex_plot[2])[0, 0])),
+                 np.hstack(((Vertex_plot[2])[:, 1], np.squeeze(Vertex_plot[2])[0, 1])), "-bs")
+
+
+        plt.xlim([-2.5, 2.5])
+        plt.ylim([-1, 4.5])
+    plt.show()
+    
 
 
 PlotRegions(Vertex, plt, np, x_feasible)
@@ -149,7 +205,7 @@ for i in range(0, SSit):
     # Build SS and Q-function using previous data (3 STEPS)
     # STEP1: For each point in the previous trajectory, check to which region it belongs
     for j in range(0, Time+1):
-        IndexVec[j] = CurrentRegion(x[:, j, i], F_region, b_region, np, 1)
+        IndexVec[j] = CurrentRegion(x[:, j, i], F_region, b_region, np, 1) # ESTIMATE
 
     # STEP2: Compute the cost to go along the realized trajectory
     TotCost[0:(Steps[i]+1), i] = ComputeCost(Q_LMPC, R_LMPC, x[:,0:(Steps[i]+1),0], u[:,0:(Steps[i]+0),0], np, int(Steps[i]))
@@ -192,9 +248,10 @@ for it in range(SSit, Iteration):
                                                 GetPred, Parallel, p, partial,
                                                 spmatrix, qp, matrix, SelectReg, BuildMatEqConst,
                                                 BuildMatEqConst_LMPC, BuildMatIneqConst, F_region, b_region,
-                                                CurrentRegion, SysEvolution, TotCost, plt, Vertex,
+                                                CurrentRegion, SysEvolution, TotCost, plt, Vertex_perturbed,
                                                 Steps, NumberPlots, IterationPlot, FTOCP_LMPC_CVX_Cost_Parallel, 
-                                                SwLogic, A_true=A_true, B_true=B_true)
+                                                SwLogic, A_true=A_true, B_true=B_true,
+                                                F_region_true = F_region, b_region_true=b_region)
 
     # LMPC iteration is completed: Stop the timer
     endTimer = datetime.datetime.now()
@@ -218,23 +275,27 @@ for it in range(SSit, Iteration):
 
     # STEP4: Update models based on collected data
     # Use data to fit linear models
-    for i in range(0, Steps[it]):
-        cluster_labels.append(CurrentRegion(x[:,i,it], F_region, b_region, np, 0))
-        zs.append(np.hstack([x[:,i, it], u[:,i, it]]))
-        ys.append(x[:,i+1, it]) 
+    if A_ERROR > 0 or B_ERROR > 0:
+        for i in range(0, Steps[it]):
+            if x[0,i,it] > 1000: print(i)
+            cluster_labels.append(CurrentRegion(x[:,i,it], F_region, b_region, np, 0))
+            zs.append(np.hstack([x[:,i, it], u[:,i, it]]))
+            ys.append(x[:,i+1, it]) 
 
 
-    thetas = []
-    for a,b in zip(A,B):
-        thetas.append(np.vstack([a.T,b.T,np.zeros([1,a.shape[1]])]))
-    pwa_model = pwac.ClusterPWA(np.array(zs), np.array(ys), [np.array(cluster_labels), np.array(thetas)], init_type='labels_models')
-    print("estimation error:", np.linalg.norm(pwa_model.thetas-thetas_true)) # can't fit B because lack of excitation
-    A_est = []; B_est = [];
-    for theta in pwa_model.thetas:
-        A_est.append(theta[0:n,:].T)
-        B_est.append(theta[n:n+d,:].T)
-    A = A_est
-    B = B_est
+        thetas = []
+        for a,b in zip(A,B):
+            thetas.append(np.vstack([a.T,b.T,np.zeros([1,a.shape[1]])]))
+        pwa_model = pwac.ClusterPWA(np.array(zs), np.array(ys), [np.array(cluster_labels), np.array(thetas)], init_type='labels_models')
+        print("estimation error:", np.linalg.norm(pwa_model.thetas-thetas_true)) # can't fit B because lack of excitation
+        theta_estimation.append(np.linalg.norm(pwa_model.thetas-thetas_true))
+        A_est = []; B_est = [];
+        for theta in pwa_model.thetas:
+            A_est.append(theta[0:n,:].T)
+            B_est.append(theta[n:n+d,:].T)
+        A = A_est
+        B = B_est
+
 
     # Print the results from the it-th iteration
     print("Learning Iteration: %d, Time Steps %.1f, Iteration Cost: %.5f, Cost Improvement: %.7f, Iteration time: %.3fs, Avarage MIQP solver time: %.3fs"
@@ -245,7 +306,7 @@ for it in range(SSit, Iteration):
     #     print("Iteration cost along the iterations: ", TotCost[0, 0:it+1])
     #     break
     #el
-    if (TotCost[0, it-1] - TotCost[0, it]) < toll:      # Check if the LMPC has converged within the used-defined tollerance
+    if np.abs(TotCost[0, it-1] - TotCost[0, it]) < toll:      # Check if the LMPC has converged within the used-defined tollerance
         print("The LMPC has converged at iteration %d, The Optimal Cost is: %.5f" %(it, TotCost[0, it]))
         break
 
@@ -269,12 +330,14 @@ print("Evolution First Feasible trajecotry and Steady state \n", list_start, "\n
 # ======================================================================================================================
 # ================================================ PLOTS ===============================================================
 # ======================================================================================================================
-plt.plot(np.hstack(((Vertex[0])[:, 0], np.squeeze(Vertex[0])[0, 0])),
-             np.hstack(((Vertex[0])[:, 1], np.squeeze(Vertex[0])[0, 1])), "-rs")
-plt.plot(np.hstack(((Vertex[1])[:, 0], np.squeeze(Vertex[1])[0, 0])),
-         np.hstack(((Vertex[1])[:, 1], np.squeeze(Vertex[1])[0, 1])), "-ks")
-plt.plot(np.hstack(((Vertex[2])[:, 0], np.squeeze(Vertex[2])[0, 0])),
-         np.hstack(((Vertex[2])[:, 1], np.squeeze(Vertex[2])[0, 1])), "-bs")
+
+for Vertex_plot in [Vertex]:
+    plt.plot(np.hstack(((Vertex_plot[0])[:, 0], np.squeeze(Vertex_plot[0])[0, 0])),
+                 np.hstack(((Vertex_plot[0])[:, 1], np.squeeze(Vertex_plot[0])[0, 1])), "-rs")
+    plt.plot(np.hstack(((Vertex_plot[1])[:, 0], np.squeeze(Vertex_plot[1])[0, 0])),
+             np.hstack(((Vertex_plot[1])[:, 1], np.squeeze(Vertex_plot[1])[0, 1])), "-ks")
+    plt.plot(np.hstack(((Vertex_plot[2])[:, 0], np.squeeze(Vertex_plot[2])[0, 0])),
+             np.hstack(((Vertex_plot[2])[:, 1], np.squeeze(Vertex_plot[2])[0, 1])), "-bs")
 
 plt.plot(x[0,0:Steps[0]+1,0], x[1,0:Steps[0]+1,0], '-ro')
 for i in range(1,it):
@@ -284,5 +347,9 @@ plt.plot(x[0,0:Steps[it]+1,it], x[1,0:Steps[it]+1,it], '-bo')
 
 plt.xlim([-2.5, 2.5])
 plt.ylim([-1, 4.5])
-
 plt.show()
+
+if A_ERROR > 0 or B_ERROR > 0:
+    plt.show()
+    print(theta_estimation)
+    plt.figure(); plt.plot(theta_estimation); plt.title("model estimation error"); plt.show()

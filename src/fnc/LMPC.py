@@ -1,12 +1,17 @@
 def LMPC(A, B, x, u, it, SSit, np, M_sparse, PointSS, SSindex, FTOCP_LMPC_CVX,
          n, d, N, linalg, GetPred, Parallel, p, partial, spmatrix, qp, matrix,
          SelectReg, BuildMatEqConst, BuildMatEqConst_LMPC, BuildMatIneqConst, F_region, b_region, CurrentRegion, SysEvolution, TotCost,
-         plt, Vertex, Steps, NumberPlots, IterationPlot, FTOCP_LMPC_CVX_Cost_Parallel, SwLogic, A_true=None, B_true=None):
+         plt, Vertex, Steps, NumberPlots, IterationPlot, FTOCP_LMPC_CVX_Cost_Parallel, SwLogic, A_true=None, B_true=None, 
+         F_region_true = None, b_region_true=None):
     
     if A_true is None: 
         A_true = A
     if B_true is None:
         B_true = B
+    if F_region_true is None: 
+        F_region_true = F_region
+    if b_region_true is None: 
+        b_region_true = b_region
     # ==================================================================================================================
     # ========================== This functions run the it-th LMPC closed loop iteration ===============================
     # ==================================================================================================================
@@ -153,7 +158,7 @@ def LMPC(A, B, x, u, it, SSit, np, M_sparse, PointSS, SSindex, FTOCP_LMPC_CVX,
             break
 
         # Apply the input to the system
-        x[:, t + 1, it] = SysEvolution(x[:, t, it], u[:, t, it], F_region, b_region, np, CurrentRegion, A_true, B_true)
+        x[:, t + 1, it] = SysEvolution(x[:, t, it], u[:, t, it], F_region_true, b_region_true, np, CurrentRegion, A_true, B_true)
         # print "Solver Time ", time.clock() - start_time, "seconds"
 
         # Now check if the terminal point used as terminal constraint in the best QP is the terminal point of our task
@@ -185,7 +190,7 @@ def LMPC(A, B, x, u, it, SSit, np, M_sparse, PointSS, SSindex, FTOCP_LMPC_CVX,
     # Here we could have solved few QPs with different time horizons. This issue comes from the fact that we want to mimic an infinite horizon control problem.
     for i in range(1, N):
         u[:, t, it] = uPred[i]                              # Extract the input from the predicted ones
-        x[:, t + 1, it] = SysEvolution(x[:, t, it], u[:, t, it], F_region, b_region, np, CurrentRegion, A, B)  # Apply the input to the system
+        x[:, t + 1, it] = SysEvolution(x[:, t, it], u[:, t, it], F_region_true, b_region_true, np, CurrentRegion, A_true, B_true)  # Apply the input to the system
         t = t + 1                                                                                              # Update time index for the simulation
 
     return x[:,:,it], u[:,:,it], t
