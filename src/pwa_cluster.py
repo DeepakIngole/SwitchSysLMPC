@@ -89,7 +89,7 @@ class ClusterPWA:
             c_error = self.update_clusters(verbose=verbose)
             if verbose:
                 print(c_error)
-        print("done")
+        if verbose: print("done")
 
     def determine_polytopic_regions(self, verbose=False):
         ws = self.get_polytopic_regions(verbose)
@@ -202,17 +202,18 @@ class ClusterPWA:
     def get_polytopic_regions(self, verbose=False):
         prob, ws = cvx_cluster_problem(self.zs[:,0:self.z_cutoff], self.cluster_labels)
         prob.solve(verbose=verbose)
-        assert prob.status == 'optimal', "ERROR: nonoptimal polytope regions"
+        if prob.status != 'optimal': print("ERROR: nonoptimal polytope regions")
         return [w.value for w in ws]
 
 def cvx_cluster_problem(zs, labels):
     s = np.unique(labels).size
+
     
     Ms = []
     ms = []
     ws = []
-    for i in range(s):
-        selected_z = zs[np.where(labels == i)]
+    for i,label in enumerate(np.sort(np.unique(labels))):
+        selected_z = zs[np.where(labels == label)]
         num_selected = selected_z.shape[0]
         M = np.hstack([selected_z,np.ones([num_selected,1])])
         Ms.append(M); ms.append(num_selected)
@@ -232,7 +233,6 @@ def getRegionMatrices(region_fns):
     F_region = []; b_region = []
     Nr = len(region_fns)
     dim = region_fns[0].size
-    print(Nr, dim)
     for i in range(Nr):
         F = np.zeros([Nr-1, dim-1])
         b = np.zeros(Nr-1)
