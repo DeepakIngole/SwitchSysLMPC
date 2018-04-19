@@ -1,8 +1,8 @@
 def LMPC(A, B, x, u, it, SSit, np, M_sparse, PointSS, SSindex, FTOCP_LMPC_CVX,
          n, d, N, linalg, GetPred, Parallel, p, partial, spmatrix, qp, matrix,
          SelectReg, BuildMatEqConst, BuildMatEqConst_LMPC, BuildMatIneqConst, F_region, b_region, CurrentRegion, SysEvolution, TotCost,
-         plt, Vertex, Steps, NumberPlots, IterationPlot, FTOCP_LMPC_CVX_Cost_Parallel, SwLogic, A_true=None, B_true=None, 
-         F_region_true = None, b_region_true=None):
+         plt, Steps, NumberPlots, IterationPlot, FTOCP_LMPC_CVX_Cost_Parallel, SwLogic, A_true=None, B_true=None, 
+         F_region_true = None, b_region_true=None, Vertex=None):
     
     if A_true is None: 
         A_true = A
@@ -125,8 +125,8 @@ def LMPC(A, B, x, u, it, SSit, np, M_sparse, PointSS, SSindex, FTOCP_LMPC_CVX,
 
         # ==============================================================================================================
         # ============================================ PLOT ============================================================
-        if (NumberPlots > 0) and (it >= IterationPlot) and (it <= IterationPlot + NumberPlots):
-            plt.plot(np.hstack(((Vertex[0])[:, 0], np.squeeze(Vertex[0])[0, 0])),
+        if (NumberPlots > 0) and (it >= IterationPlot) and (it <= IterationPlot + NumberPlots) and Vertex is not None:
+            plt.plot(np.hstack(((f[0])[:, 0], np.squeeze(Vertex[0])[0, 0])),
                      np.hstack(((Vertex[0])[:, 1], np.squeeze(Vertex[0])[0, 1])), "-rs")
             plt.plot(np.hstack(((Vertex[1])[:, 0], np.squeeze(Vertex[1])[0, 0])),
                      np.hstack(((Vertex[1])[:, 1], np.squeeze(Vertex[1])[0, 1])), "-ks")

@@ -324,7 +324,7 @@ for i in range(0, int(Steps[0])+1):
 print("Steps in Region 0, Firs Feasible Solution: ",list_start.count(0), " Steady State: ", list_it.count(0))
 print("Steps in Region 1, Firs Feasible Solution: ",list_start.count(1), " Steady State: ", list_it.count(1))
 print("Steps in Region 1, Firs Feasible Solution: ",list_start.count(2), " Steady State: ", list_it.count(2))
-print("Evolution First Feasible trajecotry and Steady state \n", list_start, "\n", list_it)
+print("Evolution First Feasible trajectory and Steady state \n", list_start, "\n", list_it)
 # print x[:,:,it]
 
 # ======================================================================================================================
