@@ -7,76 +7,73 @@ class ClusterPWA:
     """stores clustered points and associate affine models
 
     Attributes:
-        kernelMapCol: function returning columns of kernel map
-        smoothing: parameter for smoothing objective functions
-        precomputed: boolean indicated presence of precomputed kernel map
-        (optional) kernelMap: precomputed full map
-        (optional) KTK: kernel map conjugate transposed with itself
+        TODO
     """
 
-    def __init__(self, zs, ys, initialization, init_type = None, z_cutoff=None):
+    def __init__(self, zs, ys, num_clusters, centroids, thetas,
+                 cluster_labels, cov_c, z_cutoff=None):
         """object initialization
 
         Args:
             zs, ys: datapoints with which to estimate PWA function from z->y
-            ignore_dims: dimensions of z to ignore for clustering
+            z_cutoff: dimensions of z to ignore for clustering
             initialization: can be one of following
                 1. an integer describing the number of clusters
                 2. a tuple containing the centroids and affine functions
                 3. a list of cluster labels for each data point 
         """
+        # Initializing data
         self.ys = ys; self.dimy = ys[0].size
         self.zs = zs; self.dimz = zs[0].size
         if z_cutoff == None:
             self.z_cutoff = self.dimz
         else:
+            assert z_cutoff <= self.dimz, ("Cannot ignore z dimensions, \
+                                            %d > %d").format(z_cutoff, self.dimz) 
             self.z_cutoff = z_cutoff
         self.Nd = zs.shape[0]
-        self.cov_e = np.eye(self.dimy) # to do: change?
+        self.cov_e = np.eye(self.dimy) # TODO: change error model?
+
+        # Initializing clusters and models
+        self.cluster_labels = cluster_labels
+        self.centroids = centroids
+        self.thetas = thetas
+        self.Nc = num_clusters
+        self.cov_c = cov_c
+
+
         self.update_thetas = True
 
-        if init_type is None:
-            if isinstance(initialization, int):
-                init_type = 'num_clusters'
-            elif len(initialization) == 2:
-                init_type = 'centroids'
-            else:
-                init_type = 'labels'
+    @classmethod
+    def from_num_clusters(cls, zs, ys, num_clusters, z_cutoff=None):
+        dimy = ys[0].size; dimz = zs[0].size
+        # centroids are initialized to be randomly spread over the range of the data
+        centroids = np.random.uniform(size=np.hstack([num_clusters, z_cutoff]))
+        offset = np.amin(zs, axis=0)
+        spread = np.amax(zs, axis=0) - offset
+        for i in range(z_cutoff):
+            centroids[:,i] = spread[i]*centroids[:,i] + offset[i]
+        # covariances are initialized as identity
+        cov_c = [np.eye(z_cutoff) for i in range(centroids.shape[0])]
+        # labels are initialized to zero
+        cluster_labels = np.zeros(zs.shape[0])
+        # models are initialized to zero
+        thetas = np.zeros( np.hstack([num_clusters, dimz+1, dimy]))
+        return cls(zs, ys, num_clusters, centroids, thetas, 
+                   cluster_labels, cov_c, z_cutoff)
 
-        if init_type == 'num_clusters':
-            self.Nc = initialization
-            self.thetas = np.zeros( np.hstack([self.Nc, self.dimz+1, self.dimy]))
-            self.centroids = np.random.uniform(size=np.hstack([self.Nc, self.z_cutoff]))
-            offset = np.amin(self.zs, axis=0)
-            spread = np.amax(self.zs, axis=0) - offset
-            for i in range(self.z_cutoff):
-                self.centroids[:,i] = spread[i]*self.centroids[:,i] + offset[i]
-            self.cov_c = [np.eye(self.z_cutoff) for i in range(self.centroids.shape[0])]
-            self.cluster_labels = np.zeros(self.Nd)
-        elif init_type == 'centroids':
-            self.centroids, self.thetas = initialization
-            self.Nc = self.centroids.shape[0]
-            self.cluster_labels = np.zeros(self.Nd)
-            self.cov_c = [np.eye(self.z_cutoff) for i in range(self.Nc)]
-        elif init_type == 'labels':
-            self.cluster_labels = initialization
-            self.Nc = np.unique(self.cluster_labels).size
-            self.centroids, self.thetas, self.cov_c = self.get_model_from_labels()
-        elif init_type == 'labels_models':
-            self.cluster_labels = initialization[0]
-            self.thetas = initialization[1]
-            self.Nc = len(self.thetas) #np.unique(self.cluster_labels).size
-            self.thetas = self.get_updated_thetas()
-            self.centroids, _, self.cov_c = self.get_model_from_labels()
-        elif init_type == 'labels_models_noupdate':
-            self.cluster_labels = initialization[0]
-            self.thetas = initialization[1]
-            self.Nc = len(self.thetas) #np.unique(self.cluster_labels).size
-            self.update_thetas == False
-            self.centroids, _, self.cov_c = self.get_model_from_labels()
-            self.fit_clusters()
-            self.determine_polytopic_regions()
-            #self.centroids, _, self.cov_c = self.get_model_from_labels()
+    @classmethod
+    def from_centroids_models(cls, zs, ys, centroids, thetas, z_cutoff=None):
+        cov_c = [np.eye(z_cutoff) for i in range(centroids.shape[0])]
+        return cls(zs, ys, len(centroids), centroids, thetas, 
+                   np.zeros(zs.shape[0]), cov_c, z_cutoff)
+
+    @classmethod
+    def from_labels(cls, zs, ys, cluster_labels, z_cutoff=None):
+        centroids, thetas, cov_c = ClusterPWA.get_model_from_labels(zs, ys, 
+                                                     cluster_labels, z_cutoff)
+        return cls(zs, ys, np.unique(self.cluster_labels).size, centroids, thetas, 
+                   cluster_labels, cov_c, z_cutoff)
 
     def fit_clusters(self, verbose=False):
         """iteratively fits points to clusters and affine models
@@ -87,8 +84,7 @@ class ClusterPWA:
         c_error = 100
         while c_error > 1e-6:
             c_error = self.update_clusters(verbose=verbose)
-            if verbose:
-                print(c_error)
+            if verbose: print(c_error)
         if verbose: print("done")
 
     def determine_polytopic_regions(self, verbose=False):
@@ -100,9 +96,11 @@ class ClusterPWA:
             dot_pdt = [w.transpose().dot(np.hstack([self.zs[i,0:self.z_cutoff], [1]])) for w in self.region_fns]
             self.cluster_labels[i] = np.argmax(dot_pdt)
         if self.update_thetas:
-            self.centroids, self.thetas, self.cov_c = self.get_model_from_labels()
+            self.centroids, self.thetas, self.cov_c = ClusterPWA.get_model_from_labels(self.zs, 
+                                             self.ys, self.cluster_labels, self.z_cutoff)
         else:
-            self.centroids, _, self.cov_c = self.get_model_from_labels()
+            self.centroids, _, self.cov_c = ClusterPWA.get_model_from_labels(self.zs, self.ys, 
+                                             self.cluster_labels, self.z_cutoff)
 
     def update_clusters(self, verbose=False):
         """updates cluster assignment, centroids, and affine models
@@ -124,10 +122,18 @@ class ClusterPWA:
         # updating model based on new clusters
         if verbose: print("updating models")
         if self.update_thetas:
-            self.centroids, self.thetas, self.cov_c = self.get_model_from_labels()
+            self.centroids, self.thetas, self.cov_c = ClusterPWA.get_model_from_labels(self.zs, self.ys, 
+                                             self.cluster_labels, self.z_cutoff)
         else:
-            self.centroids, _, self.cov_c = self.get_model_from_labels()        
-        c_error = np.linalg.norm(self.centroids-centroids_old, ord='fro')
+            self.centroids, _, self.cov_c = ClusterPWA.get_model_from_labels(self.zs, self.ys, 
+                                             self.cluster_labels, self.z_cutoff)        
+        try:
+            c_error = np.linalg.norm(self.centroids-centroids_old, ord='fro')
+        except ValueError as e:
+            # TODO: deal with this better
+            print(e)
+            self.Nc = len(self.centroids)
+            c_error = 1
         return c_error
 
     def cluster_quality(self, z, y):
@@ -153,33 +159,46 @@ class ClusterPWA:
         ydists = [disty(i) for i in range(self.Nc)]
         return np.array(zdists) + np.array(ydists)
 
-    def get_model_from_labels(self):
+    @staticmethod
+    def get_model_from_labels(zs, ys, labels, z_cutoff=None):
         """ 
         Uses the cluster labels and data to return centroids and models and spatial covariances
 
         Returns
             centroid, affine model, and spatial covariance for each cluster
         """
-        thetas = np.zeros( np.hstack([self.Nc, self.dimz+1, self.dimy]))
-        centroids = np.random.uniform(size=np.hstack([self.Nc, self.z_cutoff]))
-        cov_c = [np.eye(self.z_cutoff) for i in range(self.Nc)]
-        for i in range(self.Nc):
-            points = [self.zs[j] for j in range(self.Nd) if self.cluster_labels[j] == i]
-            points_cutoff = [self.zs[j][0:self.z_cutoff] for j in range(self.Nd) if self.cluster_labels[j] == i]
-            points_y = [self.ys[j] for j in range(self.Nd) if self.cluster_labels[j] == i]
+        dimy = ys[0].size; dimz = zs[0].size
+        if z_cutoff is None:
+            z_cutoff = dimz
+        Nc = np.unique(labels).size
+        Nd = zs.shape[0]
+
+        thetas = np.zeros( np.hstack([Nc, dimz+1, dimy]))
+        centroids = np.random.uniform(size=np.hstack([Nc, z_cutoff]))
+        cov_c = [np.eye(z_cutoff) for i in range(Nc)]
+
+        # for each cluster
+        for i in range(Nc):
+            # gather points within the cluster
+            points = [zs[j] for j in range(Nd) if labels[j] == i]
+            points_cutoff = [zs[j][0:z_cutoff] for j in range(Nd) if labels[j] == i]
+            points_y = [ys[j] for j in range(Nd) if labels[j] == i]
             if len(points) == 0:
-                # put "random" point in this cluster -- TODO more logic
-                ind = int(np.round(self.Nd*np.random.rand()))
-                self.cluster_labels[ind] == i
-                points = [self.zs[ind]]
-                points_y = [self.ys[ind]]
+                # if empty, place a random point
+                # TODO more logic
+                ind = int(np.round(Nd*np.random.rand()))
+                labels[ind] == i
+                points = [zs[ind]]
+                points_cutoff = [zs[ind][0:z_cutoff]]
+                points_y = [ys[ind]]
             else:
+                # compute covariance
                 cov_c[i] = np.cov(points_cutoff, rowvar=False)
                 if len(cov_c[i].shape) != 2:
                     cov_c[i] = np.array([[cov_c[i]]])
+            # compute centroids and affine fit
             centroids[i] = np.mean(np.array(points_cutoff), axis=0)
-            ls_res = np.linalg.lstsq(np.hstack([points, np.ones([len(points),1])]), points_y)
-            thetas[i] = ls_res[0] # affine fit x and y
+            thetas[i] = affine_fit(points, points_y) 
             assert len(cov_c[i].shape) == 2, cov_c[i].shape
         return centroids, thetas, cov_c
 
@@ -204,6 +223,11 @@ class ClusterPWA:
         prob.solve(verbose=verbose)
         if prob.status != 'optimal': print("ERROR: nonoptimal polytope regions")
         return [w.value for w in ws]
+
+def affine_fit(x,y):
+        # TODO use best least squares (scipy?)
+        ls_res = np.linalg.lstsq(np.hstack([x, np.ones([len(x),1])]), y)
+        return ls_res[0]
 
 def cvx_cluster_problem(zs, labels):
     s = np.unique(labels).size
