@@ -130,7 +130,7 @@ def BuildMatIneqConst(N, n, np, linalg, spmatrix, Fx, bx, SelectReg):
     # Let's start by computing the submatrix of F relates with the input
     rep_b = [Fu[0]] * (N)
     Futot = linalg.block_diag(*rep_b)
-    butot = np.repeat(bu[0], N)
+    butot = np.tile(np.squeeze(bu[0]), N)
 
     # Let's stack all together
     rFxtot, cFxtot = np.shape(Fxtot)
@@ -196,6 +196,6 @@ def BuildMatCost(Q, R, P, N, linalg, np, spmatrix):
 
 def GetPred(Solution,n,d,N, np):
     xPred = np.squeeze(np.transpose(np.reshape((Solution[np.arange(n*(N+1))]),(N+1,n))))
-    uPred = np.squeeze(np.transpose(np.reshape((Solution[n*(N+1)+np.arange(d*N)]),(d, N))))
+    uPred = np.squeeze(np.transpose(np.reshape((Solution[n*(N+1)+np.arange(d*N)]),(N, d))))
 
     return xPred, uPred
