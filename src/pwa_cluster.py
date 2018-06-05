@@ -236,9 +236,11 @@ class ClusterPWA:
         return thetas
 
     def get_polytopic_regions(self, verbose=False):
+        # TODO: smart filtering of points in clusters to use fewer
+        # or iterative method
         prob, ws = cvx_cluster_problem(self.zs[:,0:self.z_cutoff], self.cluster_labels)
-        prob.solve(verbose=verbose)
-        if prob.status != 'optimal': print("ERROR: nonoptimal polytope regions")
+        prob.solve(verbose=verbose,solver=cvx.SCS)
+        if prob.status != 'optimal': print("WARNING: nonoptimal polytope regions:", prob.status)
         return [w.value for w in ws]
 
 def affine_fit(x,y):
