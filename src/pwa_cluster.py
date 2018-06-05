@@ -2,6 +2,10 @@ import numpy as np
 import scipy.linalg as la
 import rls
 import cvxpy as cvx
+import sys
+sys.path.append('../../SwitchSysLMPC/src')
+import pwa_cluster as pwac
+
 
 class ClusterPWA:
     """stores clustered points and associate affine models
