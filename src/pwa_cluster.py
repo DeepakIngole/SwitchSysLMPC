@@ -22,6 +22,7 @@ class ClusterPWA:
                 2. a tuple containing the centroids and affine functions
                 3. a list of cluster labels for each data point 
         """
+        # TODO assertions about types and shapes
         # Initializing data
         self.ys = ys; self.dimy = ys[0].size
         self.zs = zs; self.dimz = zs[0].size
@@ -47,14 +48,15 @@ class ClusterPWA:
     @classmethod
     def from_num_clusters(cls, zs, ys, num_clusters, z_cutoff=None):
         dimy = ys[0].size; dimz = zs[0].size
+        z_lim = dimz if z_cutoff is None else z_cutoff
         # centroids are initialized to be randomly spread over the range of the data
-        centroids = np.random.uniform(size=np.hstack([num_clusters, z_cutoff]))
+        centroids = np.random.uniform(size=np.hstack([num_clusters, z_lim]))
         offset = np.amin(zs, axis=0)
         spread = np.amax(zs, axis=0) - offset
-        for i in range(z_cutoff):
+        for i in range(z_lim):
             centroids[:,i] = spread[i]*centroids[:,i] + offset[i]
         # covariances are initialized as identity
-        cov_c = [np.eye(z_cutoff) for i in range(centroids.shape[0])]
+        cov_c = [np.eye(z_lim) for i in range(centroids.shape[0])]
         # labels are initialized to zero
         cluster_labels = np.zeros(zs.shape[0])
         # models are initialized to zero
@@ -64,7 +66,8 @@ class ClusterPWA:
 
     @classmethod
     def from_centroids_models(cls, zs, ys, centroids, thetas, z_cutoff=None):
-        cov_c = [np.eye(z_cutoff) for i in range(centroids.shape[0])]
+        z_lim = zs[0].size if z_cutoff is None else z_cutoff
+        cov_c = [np.eye(z_lim) for i in range(centroids.shape[0])]
         return cls(zs, ys, len(centroids), centroids, thetas, 
                    np.zeros(zs.shape[0]), cov_c, z_cutoff)
 
@@ -75,7 +78,21 @@ class ClusterPWA:
         return cls(zs, ys, np.unique(self.cluster_labels).size, centroids, thetas, 
                    cluster_labels, cov_c, z_cutoff)
 
-    def fit_clusters(self, verbose=False):
+    def add_data(self, new_zs, new_ys):
+        # TODO assertions about data size
+        self.zs = np.vstack([self.zs, new_zs])
+        self.ys = np.vstack([self.ys, new_ys])
+        self.cluster_labels = np.hstack([self.cluster_labels, 
+                                          np.zeros(new_zs.shape[0])])
+        self.Nd = self.zs.shape[0]
+
+    def add_data_update(self, new_zs, new_ys, verbose=False, full_update=True):
+        Nd_old = self.Nd
+        self.add_data(new_zs, new_ys)
+        self.update_clusters(verbose=verbose, data_start=Nd_old)
+        if full_update: self.fit_clusters(verbose=verbose)
+
+    def fit_clusters(self, data_start=0, verbose=False):
         """iteratively fits points to clusters and affine models
 
         Args:
@@ -83,7 +100,7 @@ class ClusterPWA:
         """
         c_error = 100
         while c_error > 1e-6:
-            c_error = self.update_clusters(verbose=verbose)
+            c_error = self.update_clusters(verbose=verbose, data_start=data_start)
             if verbose: print(c_error)
         if verbose: print("done")
 
@@ -102,7 +119,7 @@ class ClusterPWA:
             self.centroids, _, self.cov_c = ClusterPWA.get_model_from_labels(self.zs, self.ys, 
                                              self.cluster_labels, self.z_cutoff)
 
-    def update_clusters(self, verbose=False):
+    def update_clusters(self, data_start=0, verbose=False):
         """updates cluster assignment, centroids, and affine models
 
         Returns:
@@ -111,7 +128,7 @@ class ClusterPWA:
         # Assigning each value point to best-fit cluster
         if verbose:
             print("assigning datapoints to clusters")
-        for i in range(self.Nd):
+        for i in range(data_start, self.Nd):
             quality_of_clusters = self.cluster_quality(self.zs[i], self.ys[i])
             cluster = np.argmin(quality_of_clusters)
             self.cluster_labels[i] = cluster
