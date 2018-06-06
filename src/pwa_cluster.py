@@ -257,6 +257,7 @@ class ClusterPWA:
         # TODO: smart filtering of points in clusters to use fewer
         # or iterative method
         prob, ws = cvx_cluster_problem(self.zs[:,0:self.z_cutoff], self.cluster_labels)
+        # TODO check solver settings, max iter, tol, etc
         prob.solve(verbose=verbose,solver=cvx.SCS)
         if prob.status != 'optimal': print("WARNING: nonoptimal polytope regions:", prob.status)
         return [w.value for w in ws]
