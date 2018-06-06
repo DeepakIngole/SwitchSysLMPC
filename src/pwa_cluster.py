@@ -2,9 +2,7 @@ import numpy as np
 import scipy.linalg as la
 import rls
 import cvxpy as cvx
-import sys
-sys.path.append('../../SwitchSysLMPC/src')
-import pwa_cluster as pwac
+
 
 
 class ClusterPWA:
@@ -134,20 +132,9 @@ class ClusterPWA:
                 estimation_errors.append(yhat-self.ys[i])
         else:
             # compute errors on the test data new_zs, new_ys
-            if self.region_fns is not None:
-                # use region functions to assign model
-                for i in range(new_zs.shape[0]):
-                    dot_pdt = [w.T.dot(np.hstack([new_zs[i,0:self.z_cutoff], [1]])) for w in self.region_fns]
-                    idx = np.argmax(dot_pdt)
-                    yhat = self.thetas[idx].T.dot(np.hstack([new_zs[i], 1]))
-                    estimation_errors.append(yhat-new_ys[i])
-            else:
-                # use clustering to assign model
-                for i in range(new_zs.shape[0]):
-                    quality_of_clusters = self.cluster_quality(new_zs[i], new_ys[i], no_y=True)
-                    idx = np.argmin(quality_of_clusters)
-                    yhat = self.thetas[idx].T.dot(np.hstack([new_zs[i], 1]))
-                    estimation_errors.append(yhat-new_ys[i])
+            for i in range(new_zs.shape[0]):
+                yhat = self.get_prediction(new_zs[i])
+                estimation_errors.append(yhat-new_ys[i])
         return np.array(estimation_errors)
 
     def update_clusters(self, data_start=0, verbose=False):
@@ -273,6 +260,19 @@ class ClusterPWA:
         prob.solve(verbose=verbose,solver=cvx.SCS)
         if prob.status != 'optimal': print("WARNING: nonoptimal polytope regions:", prob.status)
         return [w.value for w in ws]
+
+    def get_prediction(self, z):
+        if self.region_fns is not None:
+            # use region functions to assign model
+            dot_pdt = [w.T.dot(np.hstack([z[0:self.z_cutoff], [1]])) for w in self.region_fns]
+            idx = np.argmax(dot_pdt)
+            yhat = self.thetas[idx].T.dot(np.hstack([z, 1]))
+        else:
+            # use clustering to assign model
+            quality_of_clusters = self.cluster_quality(z, None, no_y=True)
+            idx = np.argmin(quality_of_clusters)
+            yhat = self.thetas[idx].T.dot(np.hstack([z, 1]))
+        return yhat
 
 
 
