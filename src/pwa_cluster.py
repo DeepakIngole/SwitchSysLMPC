@@ -46,6 +46,8 @@ class ClusterPWA:
         self.Nc = num_clusters
         self.cov_c = cov_c
 
+        self.region_fns = None
+
 
         self.update_thetas = True
 
@@ -113,8 +115,8 @@ class ClusterPWA:
         if ws[0] is not None:
             self.region_fns = np.array(ws)
         
-        for i in range(len(self.zs)):
-            dot_pdt = [w.transpose().dot(np.hstack([self.zs[i,0:self.z_cutoff], [1]])) for w in self.region_fns]
+        for i in range(self.Nd):
+            dot_pdt = [w.T.dot(np.hstack([self.zs[i,0:self.z_cutoff], [1]])) for w in self.region_fns]
             self.cluster_labels[i] = np.argmax(dot_pdt)
         if self.update_thetas:
             self.centroids, self.thetas, self.cov_c = ClusterPWA.get_model_from_labels(self.zs, 
@@ -122,6 +124,31 @@ class ClusterPWA:
         else:
             self.centroids, _, self.cov_c = ClusterPWA.get_model_from_labels(self.zs, self.ys, 
                                              self.cluster_labels, self.z_cutoff)
+    def get_prediction_errors(self, new_zs=None, new_ys=None):
+        estimation_errors = []
+        if new_zs is None:
+            # compute errors on the training data
+            for i in range(self.Nd):
+                idx = int(self.cluster_labels[i])
+                yhat = self.thetas[idx].T.dot(np.hstack([self.zs[i], 1]))
+                estimation_errors.append(yhat-self.ys[i])
+        else:
+            # compute errors on the test data new_zs, new_ys
+            if self.region_fns is not None:
+                # use region functions to assign model
+                for i in range(new_zs.shape[0]):
+                    dot_pdt = [w.T.dot(np.hstack([new_zs[i,0:self.z_cutoff], [1]])) for w in self.region_fns]
+                    idx = np.argmax(dot_pdt)
+                    yhat = self.thetas[idx].T.dot(np.hstack([new_zs[i], 1]))
+                    estimation_errors.append(yhat-new_ys[i])
+            else:
+                # use clustering to assign model
+                for i in range(new_zs.shape[0]):
+                    quality_of_clusters = self.cluster_quality(new_zs[i], new_ys[i], no_y=True)
+                    idx = np.argmin(quality_of_clusters)
+                    yhat = self.thetas[idx].T.dot(np.hstack([new_zs[i], 1]))
+                    estimation_errors.append(yhat-new_ys[i])
+        return np.array(estimation_errors)
 
     def update_clusters(self, data_start=0, verbose=False):
         """updates cluster assignment, centroids, and affine models
@@ -157,7 +184,7 @@ class ClusterPWA:
             c_error = 1
         return c_error
 
-    def cluster_quality(self, z, y):
+    def cluster_quality(self, z, y, no_y = False):
         """evaluates the quality of the fit of (z, y) to each current cluster
 
         Args:
@@ -170,13 +197,13 @@ class ClusterPWA:
         scaling_e = la.inv(la.sqrtm(self.cov_e))
         
         # is distz the WRONG measure of locality for PWA?
-        # distz = lambda idx: np.linalg.norm(scaling_c[idx].dot(z[0:self.z_cutoff]-self.centroids[idx]),2)
         def distz(idx): 
-            # print(scaling_c[idx].shape, z[0:self.z_cutoff].shape, self.centroids[idx].shape)
             return np.linalg.norm(scaling_c[idx].dot(z[0:self.z_cutoff]-self.centroids[idx]),2)
-        disty = lambda idx: np.linalg.norm(scaling_e.dot(y-self.thetas[idx].transpose().dot(np.hstack([z, 1]))),2)
+        disty = lambda idx: np.linalg.norm(scaling_e.dot(y-self.thetas[idx].T.dot(np.hstack([z, 1]))),2)
         
         zdists = [distz(i) for i in range(self.Nc)]
+        if no_y: 
+            return np.array(zdists)
         ydists = [disty(i) for i in range(self.Nc)]
         return np.array(zdists) + np.array(ydists)
 
@@ -247,6 +274,8 @@ class ClusterPWA:
         if prob.status != 'optimal': print("WARNING: nonoptimal polytope regions:", prob.status)
         return [w.value for w in ws]
 
+
+
 def affine_fit(x,y):
         # TODO use best least squares (scipy?)
         ls_res = np.linalg.lstsq(np.hstack([x, np.ones([len(x),1])]), y)
@@ -302,5 +331,31 @@ def check_equivalence(region_fns, F_region, b_region, x):
         if np.all(F_region[i].dot(x) <= b_region[i]):
             matrix_label.append(i)
     print(region_label, matrix_label)
+
+def select_nc_cross_validation(nc_list, zs, ys, initialization=None, verbose=False,
+                               with_polytopic_regions=False):
+    # TODO test this function
+    # TODO better train/test split (multiple?)
+    zs_train = zs[::2]; ys_train = ys[::2]
+    zs_test = zs[1::2]; ys_test = ys[1::2]
+    clustering_list = []; errors = []
+    for nc in nc_list: # TODO parallel?
+        if verbose: print("Fitting model with Nc=", nc)
+        # TODO make initialization standard
+        clustering = ClusterPWA.from_num_clusters(zs_train, ys_train, nc)
+        clustering_list.append(clustering)
+        clustering.fit_clusters(verbose=verbose)
+        if with_polytopic_regions:
+            clustering.determine_polytopic_regions()
+        train_errors = np.abs(clustering.get_prediction_errors(new_zs=zs2, new_ys=ys2))
+        test_errors = np.abs(clustering.get_prediction_errors(new_zs=zs2, new_ys=ys2))
+        # TODO: best error metric?
+        metric = np.linalg.norm(test_errors, norm='fro')
+        errors.append(metric)
+    idx_best = np.argmin(errors)
+    clustering_list[idx_best].add_data_update(zs2, ys2, verbose=verbose)
+    if with_polytopic_regions:
+        clustering.determine_polytopic_regions()
+    return clustering_list[idx_best]
     
 
