@@ -122,6 +122,10 @@ class ClusterPWA:
         else:
             self.centroids, _, self.cov_c = ClusterPWA.get_model_from_labels(self.zs, self.ys, 
                                              self.cluster_labels, self.z_cutoff)
+        
+    def get_region_matrices(self):
+        return getRegionMatrices(self.region_fns)
+
     def get_prediction_errors(self, new_zs=None, new_ys=None):
         estimation_errors = []
         if new_zs is None:
@@ -322,6 +326,16 @@ def getRegionMatrices(region_fns):
                 b[j-1] = region_fns[i,-1] - region_fns[j,-1]
         F_region.append(F); b_region.append(b)
     return F_region, b_region
+
+def get_PWA_Models(thetas, n, p):
+    As = []; Bs = []; ds = [];
+    for theta in thetas:
+        assert theta.shape[0] == n+p+1
+        assert theta.shape[1] == n
+        As.append(theta[:n, :].copy().T)
+        Bs.append(theta[n:(n+p), :].copy().T)
+        ds.append(theta[-1,:].copy().T)
+    return As, Bs, ds
 
 def check_equivalence(region_fns, F_region, b_region, x):
     dot_pdt = [w.T.dot(np.hstack([x, [1]])) for w in region_fns]
