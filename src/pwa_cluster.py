@@ -79,7 +79,7 @@ class ClusterPWA:
     def from_labels(cls, zs, ys, cluster_labels, z_cutoff=None):
         centroids, thetas, cov_c = ClusterPWA.get_model_from_labels(zs, ys, 
                                                      cluster_labels, z_cutoff)
-        return cls(zs, ys, np.unique(self.cluster_labels).size, centroids, thetas, 
+        return cls(zs, ys, np.unique(cluster_labels).size, centroids, thetas, 
                    cluster_labels, cov_c, z_cutoff)
 
     def add_data(self, new_zs, new_ys):
@@ -327,7 +327,7 @@ def getRegionMatrices(region_fns):
         F_region.append(F); b_region.append(b)
     return F_region, b_region
 
-def get_PWA_Models(thetas, n, p):
+def get_PWA_models(thetas, n, p):
     As = []; Bs = []; ds = [];
     for theta in thetas:
         assert theta.shape[0] == n+p+1
